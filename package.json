@@ -1,0 +1,30 @@
+{
+  "name": "eventl",
+  "version": "1.1.2",
+  "description": "A simple and easy to use jsonvalidator",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsup ./src/index.ts --format cjs,esm --dts --minify",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MUKUL47/jsonvalidator.git"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3",
+    "vite": "^5.1.0",
+    "tsup": "^6.5.0"
+  },
+  "author": "mukul",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/MUKUL47/jsonvalidator/issues"
+  },
+  "homepage": "https://github.com/MUKUL47/jsonvalidator#readme"
+}
