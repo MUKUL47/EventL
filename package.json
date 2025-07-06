@@ -1,6 +1,6 @@
 {
   "name": "eventflux",
-  "version": "1.1.2",
+  "version": "1.0.0",
   "description": "A feature-rich event emitter",
   "main": "./dist/index.js",
   "scripts": {
@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MUKUL47/jsonvalidator.git"
+    "url": "git+https://github.com/MUKUL47/eventflux.git"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
@@ -24,7 +24,7 @@
   "author": "mukul",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/MUKUL47/jsonvalidator/issues"
+    "url": "https://github.com/MUKUL47/eventflux/issues"
   },
-  "homepage": "https://github.com/MUKUL47/jsonvalidator#readme"
+  "homepage": "https://github.com/MUKUL47/eventflux#readme"
 }
