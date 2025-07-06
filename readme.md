@@ -70,10 +70,11 @@ const E = new EventFlux<{ EVENT: string }>({
   suppressWarnings: true,
   suppressErrors: true,
 });
-const controls = E.on("EVENT", (arg: string) => {
+const handler = (arg: string) => {
   //event & callback infered
   //do something
-});
+};
+const controls = E.on("EVENT", handler);
 
 E.emit("HELLO");
 
@@ -83,6 +84,7 @@ E.emit("Hey"); // this wont be emitted
 //ufreeze emission
 controls.unFreeze();
 E.emit("Hey"); // continue as usual
+E.off("EVENT", handler); //should be referenced callback
 ```
 
 ### Middlewares
