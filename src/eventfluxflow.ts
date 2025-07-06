@@ -1,6 +1,6 @@
 import { Logger } from "./logger";
 
-export class EventFlux<T extends EventRecord> {
+export class EventFluxFlow<T extends EventRecord> {
   private events: Map<keyof T, Array<EventData<T, keyof T>>>;
   private interceptors: Map<keyof T, Interceptors<T, keyof T>>;
   private id: number;

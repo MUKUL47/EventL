@@ -1,4 +1,4 @@
-import { EventFlux } from "../eventflux";
+import { EventFluxFlow as EventFlux } from "../eventfluxflow";
 
 describe("Priorty", () => {
   test("should sort via priority", async () => {

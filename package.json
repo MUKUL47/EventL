@@ -1,5 +1,5 @@
 {
-  "name": "eventflux",
+  "name": "eventfluxflow",
   "version": "1.0.0",
   "description": "A feature-rich event emitter",
   "main": "./dist/index.js",
@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MUKUL47/eventflux.git"
+    "url": "git+https://github.com/MUKUL47/eventfluxflow.git"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
@@ -24,7 +24,7 @@
   "author": "mukul",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/MUKUL47/eventflux/issues"
+    "url": "https://github.com/MUKUL47/eventfluxflow/issues"
   },
-  "homepage": "https://github.com/MUKUL47/eventflux#readme"
+  "homepage": "https://github.com/MUKUL47/eventfluxflow#readme"
 }

@@ -1,4 +1,4 @@
-# EventFlux
+# EventFluxFlow
 
 ## A feature-rich event orchestration library that goes far beyond just a "Event Emitter"
 
@@ -66,7 +66,7 @@ npm install orchestify
 ### Simple sync emission
 
 ```ts
-const E = new EventFlux<{ EVENT: string }>({
+const E = new EventFluxFlow<{ EVENT: string }>({
   suppressWarnings: true,
   suppressErrors: true,
 });
@@ -90,7 +90,7 @@ E.off("EVENT", handler); //should be referenced callback
 ### Middlewares
 
 ```ts
-const E = new EventFlux<{ EVENT: { v: string } }>();
+const E = new EventFluxFlow<{ EVENT: { v: string } }>();
 const controls = E.on(
   "EVENT",
   (arg: { v: string }) => {
@@ -110,7 +110,7 @@ const controls = E.on(
 
 E.emit("HELLO"); // handler will invoke with "HELLO_modify_something_modify_something1"
 
-const E = new EventFlux<{ ONLY_ODD: { resp: number } }>();
+const E = new EventFluxFlow<{ ONLY_ODD: { resp: number } }>();
 E.on("ONLY_ODD", console.log, {
   middlewares: [
     (a, c) => {
@@ -124,7 +124,7 @@ E.on("ONLY_ODD", console.log, {
 E.emit("ONLY_ODD", { resp: 12 }); //stopped at middleware
 E.emit("ONLY_ODD", { resp: 11 }); //emitted
 
-const E = new EventFlux<{ ODD_LESS_THAN_10: { resp: number } }>();
+const E = new EventFluxFlow<{ ODD_LESS_THAN_10: { resp: number } }>();
 E.on("ODD_LESS_THAN_10", console.log, {
   middlewares: [(a, c) => c.resp % 2 != 0, (a, c) => c.resp < 10],
 });
@@ -136,7 +136,7 @@ E.emit("ODD_LESS_THAN_10", { resp: 9 }); //correct
 ### Middlewares with async
 
 ```ts
-const E = new EventFlux<{ TEST: { resp: number } }>();
+const E = new EventFluxFlow<{ TEST: { resp: number } }>();
 const fn = jest.fn();
 const fnMiddle = jest.fn();
 E.on(
@@ -163,7 +163,7 @@ E.emitAsync("TEST", { resp: 10 }); //12
 
 ```ts
 //with mutable interceptor
-const E = new EventFlux<{ TEST: { resp: number } }>();
+const E = new EventFluxFlow<{ TEST: { resp: number } }>();
 E.intercept(
   "TEST",
   (arg) => {
@@ -175,7 +175,7 @@ E.on("TEST", console.log); //64
 E.emit("TEST", { resp: 8 });
 
 //with immutable interceptor
-const E = new EventFlux<{ TEST: { resp: number } }>();
+const E = new EventFluxFlow<{ TEST: { resp: number } }>();
 const fn = jest.fn();
 E.intercept("TEST", (arg: any) => {
   try {
@@ -188,7 +188,7 @@ E.on("TEST", fn);
 E.emit("TEST", { resp: 2 }); //2
 
 //with both
-const E = new EventFlux<{ TEST: { resp: number } }>();
+const E = new EventFluxFlow<{ TEST: { resp: number } }>();
 E.intercept(
   "TEST",
   (arg: any) => {
@@ -217,7 +217,7 @@ E.emit("TEST", { resp: 2 }); //4
 ### namespaces
 
 ```ts
-const E = new EventFlux<{
+const E = new EventFluxFlow<{
   ADMIN: any;
   "ADMIN:USER": any;
   "ADMIN:USER:CREATE": any;
@@ -236,7 +236,7 @@ E.emit("ADMIN", true); //ADMIN
 
 ```ts
 //only supported for .emit sync events
-const E = new EventFlux<{
+const E = new EventFluxFlow<{
   ADMIN: any;
   "ADMIN:USER": any;
   "ADMIN:USER:CREATE": any;
@@ -254,7 +254,7 @@ E.emit("ADMIN", true);
 ### invokeLimit
 
 ```ts
-const E = new EventFlux<{ TEST: number }>({ suppressWarnings: true });
+const E = new EventFluxFlow<{ TEST: number }>({ suppressWarnings: true });
 E.on("TEST", console.log, {
   invokeLimit: 2,
 });
@@ -267,7 +267,7 @@ E.emit("TEST", 5); //this wont be invoked since limit reacted
 ### debounce
 
 ```ts
-const E = new EventFlux<{ SEARCH: string }>({ suppressWarnings: true });
+const E = new EventFluxFlow<{ SEARCH: string }>({ suppressWarnings: true });
 E.on("SEARCH", console.log, {
   debounce: 300,
 });
@@ -279,7 +279,7 @@ await delay(1000);
 //ab
 //abbc
 
-const E = new EventFlux<{ SEARCH: string }>({ suppressWarnings: true });
+const E = new EventFluxFlow<{ SEARCH: string }>({ suppressWarnings: true });
 const fn = jest.fn();
 
 E.on("SEARCH", fn, {
@@ -300,7 +300,7 @@ expect(fn).toHaveBeenCalledTimes(2);
 //"XYZ"
 //"ABC"
 
-const E = new EventFlux<{ TEST: number }>({ suppressWarnings: true });
+const E = new EventFluxFlow<{ TEST: number }>({ suppressWarnings: true });
 const fn = jest.fn();
 E.on("TEST", fn, {
   debounce: 300,
@@ -318,7 +318,7 @@ E.emitAll("TEST", 5);
 ```ts
 //simple queue
 let p = "";
-const E = new EventFlux<{
+const E = new EventFluxFlow<{
   ADMIN: {
     delay: number;
     data: number;
@@ -350,7 +350,7 @@ await delay(750);
 //with invoke limit
 
 let out = "";
-const E = new EventFlux<{
+const E = new EventFluxFlow<{
   JOB: { delay: number; data: string };
 }>();
 
@@ -379,7 +379,7 @@ await delay(350);
 
 //with debounce
 
-const E = new EventFlux<{
+const E = new EventFluxFlow<{
   SEARCH: string;
 }>();
 let output = "";
@@ -415,7 +415,7 @@ await delay(120);
 
 ```ts
 //emit all will wait for all the handlers to complete - failed middlewares will be ignored in the promise pool
-const E = new EventFlux<{
+const E = new EventFluxFlow<{
   ADMIN: any;
 }>();
 const fn = jest.fn();
@@ -451,7 +451,7 @@ await E.emitAll("ADMIN", true);
 // }
 
 //with independent invokerLimits
-const E = new EventFlux<{
+const E = new EventFluxFlow<{
   ADMIN: any;
 }>();
 const fn = jest.fn();
@@ -485,7 +485,7 @@ await E.emitAll("ADMIN", true);
 //{}
 
 //with middlewares
-const E = new EventFlux<{ ADMIN: any }>({});
+const E = new EventFluxFlow<{ ADMIN: any }>({});
 let ran = { handler1: false, handler2: false };
 
 E.on(

@@ -1,4 +1,4 @@
-import { EventFlux } from "../eventflux";
+import { EventFluxFlow as EventFlux } from "../eventfluxflow";
 const delay = async (n = 0) =>
   await new Promise((resolve) => setTimeout(resolve, n));
 
