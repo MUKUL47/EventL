@@ -30,7 +30,6 @@ type EventData<T extends EventRecord, V extends keyof T> = {
   middlewares?: Middlewares<T, V>;
   status: {
     isCancelled: boolean;
-    isPaused: boolean;
   };
   id: number;
 
@@ -63,6 +62,7 @@ type EventData<T extends EventRecord, V extends keyof T> = {
 
 type EventDataOnReturn = {
   cancel: () => void;
+  id: number;
 };
 type EventDataOnParam<T extends EventRecord, V extends keyof T> = {
   middlewares?: Middlewares<T, V>;
@@ -70,4 +70,11 @@ type EventDataOnParam<T extends EventRecord, V extends keyof T> = {
   withQueue?: boolean;
   debounce?: number;
   priority?: number;
+};
+
+type MiddlewareInterceptorsArgs<T, V> = {
+  eventName: V;
+  middlewares: Middlewares<T, V>;
+  args: T[V];
+  status: EventData<T, V>["status"];
 };
