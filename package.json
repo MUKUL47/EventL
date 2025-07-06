@@ -1,6 +1,6 @@
 {
   "name": "eventfluxflow",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A feature-rich event emitter",
   "main": "./dist/index.js",
   "scripts": {
@@ -26,5 +26,25 @@
   "bugs": {
     "url": "https://github.com/MUKUL47/eventfluxflow/issues"
   },
-  "homepage": "https://github.com/MUKUL47/eventfluxflow#readme"
+  "homepage": "https://github.com/MUKUL47/eventfluxflow#readme",
+  "keywords": [
+    "event",
+    "event-emitter",
+    "event-manager",
+    "emitter",
+    "eventbus",
+    "event-driven",
+    "debounce",
+    "priority",
+    "middleware",
+    "interceptor",
+    "event-queue",
+    "async-events",
+    "sync-events",
+    "custom-events",
+    "eventflow",
+    "event-invoker",
+    "event-framework",
+    "typescript"
+  ]
 }
