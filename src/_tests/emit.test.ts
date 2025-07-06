@@ -41,7 +41,7 @@ describe("Emission", () => {
           ],
         }
       );
-      E.emit("TEST", { resp: 10 });
+      E.emitAsync("TEST", { resp: 10 });
       await delay(1000);
       expect(fn).toHaveBeenCalledWith(12);
     });
@@ -58,8 +58,8 @@ describe("Emission", () => {
           middlewares: [(a, c) => c.resp % 2 != 0],
         }
       );
-      E.emit("ONLY_ODD", { resp: 12 });
-      E.emit("ONLY_ODD", { resp: 11 });
+      E.emitAsync("ONLY_ODD", { resp: 12 });
+      E.emitAsync("ONLY_ODD", { resp: 11 });
       await delay();
       expect(fn).toHaveBeenCalledTimes(1);
       expect(fn).toHaveBeenCalledWith(11);
@@ -77,9 +77,9 @@ describe("Emission", () => {
           middlewares: [(a, c) => c.resp % 2 != 0, (a, c) => c.resp < 10],
         }
       );
-      E.emit("ODD_LESS_THAN_10", { resp: 2 });
-      E.emit("ODD_LESS_THAN_10", { resp: 13 });
-      E.emit("ODD_LESS_THAN_10", { resp: 9 });
+      E.emitAsync("ODD_LESS_THAN_10", { resp: 2 });
+      E.emitAsync("ODD_LESS_THAN_10", { resp: 13 });
+      E.emitAsync("ODD_LESS_THAN_10", { resp: 9 });
       await delay();
       expect(fn).toHaveBeenCalledTimes(1);
       expect(fn).toHaveBeenCalledWith(9);

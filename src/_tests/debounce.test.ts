@@ -10,9 +10,9 @@ describe("Debounce", () => {
       debounce: 300,
     });
 
-    E.emit("TEST", 2);
-    E.emit("TEST", 21);
-    E.emit("TEST", 5);
+    E.emitAsync("TEST", 2);
+    E.emitAsync("TEST", 21);
+    E.emitAsync("TEST", 5);
     await delay(500);
     expect(fn).toHaveBeenCalledTimes(1);
     expect(fn).toHaveBeenCalledWith(5);
@@ -25,9 +25,9 @@ describe("Debounce", () => {
       debounce: 300,
     });
 
-    setTimeout(() => E.emit("SEARCH", "a"), 100);
-    setTimeout(() => E.emit("SEARCH", "ab"), 250);
-    setTimeout(() => E.emit("SEARCH", "abbc"), 650);
+    setTimeout(() => E.emitAsync("SEARCH", "a"), 100);
+    setTimeout(() => E.emitAsync("SEARCH", "ab"), 250);
+    setTimeout(() => E.emitAsync("SEARCH", "abbc"), 650);
     await delay(1000);
     expect(fn).toHaveBeenCalledTimes(2);
     expect(fn).toHaveBeenCalledWith("ab");
@@ -42,14 +42,14 @@ describe("Debounce", () => {
       debounce: 200,
     });
 
-    E.emit("SEARCH", "A");
-    E.emit("SEARCH", "AB");
-    E.emit("SEARCH", "ABC");
+    E.emitAsync("SEARCH", "A");
+    E.emitAsync("SEARCH", "AB");
+    E.emitAsync("SEARCH", "ABC");
 
     setTimeout(() => {
-      E.emit("SEARCH", "X");
-      E.emit("SEARCH", "XY");
-      E.emit("SEARCH", "XYZ");
+      E.emitAsync("SEARCH", "X");
+      E.emitAsync("SEARCH", "XY");
+      E.emitAsync("SEARCH", "XYZ");
     }, 400);
     await delay(1000);
     expect(fn).toHaveBeenCalledTimes(2);
@@ -57,7 +57,7 @@ describe("Debounce", () => {
     expect(fn).toHaveBeenCalledWith("ABC");
   });
 
-  test("Should not invoke with asyncEmit", async () => {
+  test("Should not invoke with emitAll", async () => {
     const E = new EventL<{ TEST: number }>();
     const fn = jest.fn();
     E.on("TEST", fn, {
@@ -65,25 +65,27 @@ describe("Debounce", () => {
       invokeLimit: 5,
     });
 
-    E.asyncEmit("TEST", 2);
-    E.asyncEmit("TEST", 21);
-    E.asyncEmit("TEST", 5);
+    E.emitAll("TEST", 2);
+    E.emitAll("TEST", 21);
+    E.emitAll("TEST", 5);
     await delay();
     expect(fn).toHaveBeenCalledTimes(0);
   });
 
-  test("Should not invoke with invokerLimit", async () => {
+  test("Should invoke with invokerLimit", async () => {
     const E = new EventL<{ TEST: number }>();
     const fn = jest.fn();
     E.on("TEST", fn, {
-      debounce: 300,
-      invokeLimit: 5,
+      debounce: 50,
+      invokeLimit: 2,
     });
 
-    E.emit("TEST", 2);
-    E.emit("TEST", 21);
-    E.emit("TEST", 5);
-    await delay();
-    expect(fn).toHaveBeenCalledTimes(0);
+    E.emitAsync("TEST", 2);
+    setTimeout(() => E.emitAsync("TEST", 1), 100);
+    E.emitAsync("TEST", 5);
+    setTimeout(() => E.emitAsync("TEST", 57), 80);
+    setTimeout(() => E.emitAsync("TEST", 212), 120);
+    await delay(500);
+    expect(fn).toHaveBeenCalledTimes(2);
   });
 });

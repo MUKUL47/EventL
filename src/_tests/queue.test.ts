@@ -27,11 +27,11 @@ describe("Queue", () => {
         withQueue: true,
       }
     );
-    E.emit("ADMIN", { delay: 500, data: 1 });
-    E.emit("ADMIN", { delay: 100, data: 2 });
-    E.emit("ADMIN", { delay: 20, data: 3 });
-    E.emit("ADMIN", { delay: 0, data: 4 });
-    E.emit("ADMIN", { delay: 100, data: 5 });
+    E.emitAsync("ADMIN", { delay: 500, data: 1 });
+    E.emitAsync("ADMIN", { delay: 100, data: 2 });
+    E.emitAsync("ADMIN", { delay: 20, data: 3 });
+    E.emitAsync("ADMIN", { delay: 0, data: 4 });
+    E.emitAsync("ADMIN", { delay: 100, data: 5 });
     await delay(750);
     expect(p).toBe("12345");
   });
@@ -57,9 +57,9 @@ describe("Queue", () => {
       }
     );
 
-    E.emit("JOB", { delay: 100, data: "A" });
-    E.emit("JOB", { delay: 100, data: "B" });
-    E.emit("JOB", { delay: 100, data: "C" });
+    E.emitAsync("JOB", { delay: 100, data: "A" });
+    E.emitAsync("JOB", { delay: 100, data: "B" });
+    E.emitAsync("JOB", { delay: 100, data: "C" });
 
     await delay(350);
     expect(out).toBe("AB");
@@ -82,16 +82,16 @@ describe("Queue", () => {
       }
     );
 
-    E.emit("SEARCH", "a");
-    E.emit("SEARCH", "ab");
-    E.emit("SEARCH", "abc");
-    E.emit("SEARCH", "abcd");
+    E.emitAsync("SEARCH", "a");
+    E.emitAsync("SEARCH", "ab");
+    E.emitAsync("SEARCH", "abc");
+    E.emitAsync("SEARCH", "abcd");
 
     await delay(120);
 
-    E.emit("SEARCH", "X");
-    E.emit("SEARCH", "XY");
-    E.emit("SEARCH", "XYZ");
+    E.emitAsync("SEARCH", "X");
+    E.emitAsync("SEARCH", "XY");
+    E.emitAsync("SEARCH", "XYZ");
 
     await delay(120);
 
@@ -112,10 +112,10 @@ describe("Queue", () => {
       }
     );
 
-    E.emit("ADMIN", 1);
-    setTimeout(() => E.emit("ADMIN", 2), 50);
+    E.emitAsync("ADMIN", 1);
+    setTimeout(() => E.emitAsync("ADMIN", 2), 50);
 
-    setTimeout(() => E.emit("ADMIN", 3), 200);
+    setTimeout(() => E.emitAsync("ADMIN", 3), 200);
 
     await delay(500);
 
@@ -144,12 +144,12 @@ describe("Queue", () => {
         withQueue: true,
       }
     );
-    E.emit("ADMIN", { delay: 500, data: 1 });
-    E.emit("ADMIN", { delay: 100, data: 2 });
-    setTimeout(cancel, 610);
-    E.emit("ADMIN", { delay: 20, data: 3 });
-    E.emit("ADMIN", { delay: 0, data: 4 });
-    E.emit("ADMIN", { delay: 100, data: 5 });
+    setTimeout(cancel, 620);
+    E.emitAsync("ADMIN", { delay: 500, data: 1 });
+    E.emitAsync("ADMIN", { delay: 100, data: 2 });
+    E.emitAsync("ADMIN", { delay: 20, data: 3 });
+    E.emitAsync("ADMIN", { delay: 0, data: 4 });
+    E.emitAsync("ADMIN", { delay: 100, data: 5 });
     await delay(750);
     expect(p).toBe("12");
   });
@@ -166,9 +166,9 @@ describe("Queue", () => {
       { withQueue: true }
     );
 
-    E.emit("TASK", 1);
-    setTimeout(() => E.emit("TASK", 2), 20);
-    setTimeout(() => E.emit("TASK", 3), 40);
+    E.emitAsync("TASK", 1);
+    setTimeout(() => E.emitAsync("TASK", 2), 20);
+    setTimeout(() => E.emitAsync("TASK", 3), 40);
 
     await delay(400);
     expect(result).toBe("123");

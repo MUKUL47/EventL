@@ -32,7 +32,7 @@ describe("AsyncEmit", () => {
       await delay(50);
       obj.TASK3 = true;
     });
-    await E.asyncEmit("ADMIN", true);
+    await E.emitAll("ADMIN", true);
     expect(obj).toMatchObject({
       TASK1: true,
       TASK2: true,
@@ -79,7 +79,7 @@ describe("AsyncEmit", () => {
       await delay(50);
       obj.TASK3 = true;
     });
-    await E.asyncEmit("ADMIN", true);
+    await E.emitAll("ADMIN", true);
     expect(obj).toMatchObject({
       TASK1: true,
       TASK3: true,
@@ -107,7 +107,7 @@ describe("AsyncEmit", () => {
       ran.handler2 = true;
     });
 
-    await E.asyncEmit("ADMIN", true);
+    await E.emitAll("ADMIN", true);
     expect(ran).toEqual({ handler1: false, handler2: true });
   });
 
@@ -152,7 +152,7 @@ describe("AsyncEmit", () => {
         ],
       }
     );
-    await E.asyncEmit("ADMIN", { val: 1 });
+    await E.emitAll("ADMIN", { val: 1 });
     expect(order).toMatchObject([
       "mw1",
       "mw11",
@@ -185,18 +185,18 @@ describe("AsyncEmit", () => {
       },
       { invokeLimit: 1 }
     );
-    await E.asyncEmit("ADMIN", true);
+    await E.emitAll("ADMIN", true);
     expect(obj).toMatchObject({
       TASK1: true,
       TASK2: true,
     });
     obj = {};
-    await E.asyncEmit("ADMIN", true); //only task is stil active since limit is 1
+    await E.emitAll("ADMIN", true); //only task is stil active since limit is 1
     expect(obj).toMatchObject({
       TASK1: true,
     });
     obj = {};
-    await E.asyncEmit("ADMIN", true);
+    await E.emitAll("ADMIN", true);
     expect(obj).toMatchObject({});
   });
 });

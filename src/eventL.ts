@@ -1,18 +1,25 @@
+import { Logger } from "./logger";
+
 export class EventL<T extends EventRecord> {
   private events: Map<keyof T, Array<EventData<T, keyof T>>>;
   private interceptors: Map<keyof T, Interceptors<T, keyof T>>;
   private id: number;
-  constructor() {
+  private logger: Logger;
+  constructor(options?: Partial<ConstructorParameters<typeof Logger>["0"]>) {
+    this.logger = new Logger({
+      suppressWarnings: !!options?.suppressWarnings,
+      supressErrors: !!options?.supressErrors,
+    });
     this.events = new Map();
     this.interceptors = new Map();
     this.id = 0;
   }
 
-  get newId() {
+  get #newId() {
     return ++this.id;
   }
 
-  private updateInvoker(event: EventData<T, keyof T>) {
+  #updateInvoker(event: EventData<T, keyof T>) {
     const { invokerFinished, invokerLimit } = event;
     if (
       invokerFinished ||
@@ -26,6 +33,158 @@ export class EventL<T extends EventRecord> {
     return true;
   }
 
+  async #invokeMiddlewaresAsync<V extends keyof T>(
+    resp: MiddlewareInterceptorsArgs<T, V>
+  ): Promise<boolean> {
+    const { eventName, middlewares, args, status } = resp;
+    for (const c of middlewares ?? []) {
+      try {
+        if (!!status?.isCancelled) return false;
+        const resp = await c(eventName, args);
+        if (resp === false) return false;
+      } catch (e) {
+        this.logger.warn(e);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  #invokeMiddlewares<V extends keyof T>(
+    resp: MiddlewareInterceptorsArgs<T, V>
+  ): boolean {
+    const { eventName, middlewares, args, status } = resp;
+    for (const c of middlewares ?? []) {
+      try {
+        if (!!status?.isCancelled) return false;
+        const resp = c(eventName, args);
+        if (resp === false) return false;
+      } catch (e) {
+        this.logger.warn(e);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  #invokeInterceptors<V extends keyof T>(
+    resp: MiddlewareInterceptorsArgs<T, V>
+  ): void {
+    const { eventName, args } = resp;
+    (this.interceptors.get(eventName) ?? []).forEach(({ invoker, mutable }) => {
+      if (mutable) {
+        invoker(args);
+        return;
+      }
+      if (typeof structuredClone === "undefined") {
+        this.logger.warn(
+          "[interceptor] structuredClone not supported for immutable arguments : falling back to mutuable"
+        );
+        invoker(args);
+        return;
+      }
+      invoker?.(Object.freeze(structuredClone(args)));
+    });
+  }
+
+  async #invokeMiddlewareInterceptorsAsync<V extends keyof T>(
+    resp: MiddlewareInterceptorsArgs<T, V>
+  ) {
+    if (!(await this.#invokeMiddlewaresAsync(resp))) return false;
+    if (!!resp?.status?.isCancelled) return false;
+    this.#invokeInterceptors(resp);
+    return true;
+  }
+
+  #invokeMiddlewareInterceptors<V extends keyof T>(
+    resp: MiddlewareInterceptorsArgs<T, V>
+  ) {
+    if (!this.#invokeMiddlewares(resp) || !!resp?.status?.isCancelled)
+      return false;
+    this.#invokeInterceptors(resp);
+    return true;
+  }
+
+  #getEvents<V extends keyof T>(
+    eventName: V,
+    options?: Partial<{ namespace: boolean; debounceOnly: boolean }>
+  ): Array<EventData<T, keyof T>> {
+    const currentEvents: Array<EventData<T, keyof T>> = [];
+    for (let [name, e] of this.events) {
+      if (
+        (!!options?.namespace &&
+          (name as string)?.startsWith(eventName as string) &&
+          eventName !== name) ||
+        (!options?.namespace && eventName === name)
+      ) {
+        if (!options?.debounceOnly) {
+          currentEvents.push(...e);
+          continue;
+        }
+        const debouncedEvents = e.filter((v) => !!v.debouceFactory?.debounce);
+        if (debouncedEvents.length > 0) {
+          currentEvents.push(...debouncedEvents);
+        }
+      }
+    }
+    return currentEvents;
+  }
+
+  async #emitQueue<V extends keyof T>(
+    event: EventData<T, keyof T>,
+    args: T[V],
+    eventName: V
+  ) {
+    if (!event.queue || event.status?.isCancelled) return;
+    if (!this.#updateInvoker(event)) return;
+    event.queue.invokers.push({
+      args,
+      cb: event.invoker,
+    });
+    if (event.queue.inProgress) return;
+    while (event.queue.invokers.length > 0) {
+      event.queue.inProgress = true;
+      const current = event.queue.invokers.shift()!;
+      if (event.status?.isCancelled) return;
+      if (
+        !(await this.#invokeMiddlewareInterceptorsAsync({
+          eventName,
+          middlewares: event.middlewares ?? [],
+          args: current?.args,
+          status: event.status,
+        }))
+      ) {
+        continue;
+      }
+      if (event.status?.isCancelled) return;
+      await event.invoker(current.args);
+    }
+    event.queue.inProgress = false;
+  }
+
+  #handleDebouce(event: EventData<T, keyof T>, fn: () => any) {
+    const { debouceFactory } = event;
+    if (!!debouceFactory) {
+      debouceFactory?.lastDebouncedReference &&
+        clearTimeout(debouceFactory?.lastDebouncedReference);
+      event.debouceFactory!.lastDebouncedReference = setTimeout(
+        fn,
+        debouceFactory.debounce
+      );
+      return;
+    }
+    fn();
+  }
+
+  /**
+   * @template T - Event map
+   * @template V - event key
+   * @description Register invocation for an event
+   * @param {V} eventName - The event name to register
+   * @param {Invoker<T, V>} invoker - The callback function to be invoked
+   * @param {Partial<EventDataOnParam<T, V>>} [options] - Options like debounce, priority, withQueue, middlewares and invokeLimit.
+   * @returns {{ cancel: () => void, id: number }} - unique ID and cancel event callback
+   */
   on<V extends keyof T>(
     eventName: V,
     invoker: Invoker<T, V>,
@@ -39,13 +198,12 @@ export class EventL<T extends EventRecord> {
     const currentEvent = isNew ?? this.events.get(eventName);
     const status: EventData<T, V>["status"] = {
       isCancelled: false,
-      isPaused: false,
     };
     const invokerLimit =
       !options?.invokeLimit || options?.invokeLimit === 0
         ? -1
         : options?.invokeLimit;
-
+    const id = this.#newId;
     currentEvent?.push({
       invoker: invoker as Invoker<T, keyof T>,
       debouceFactory:
@@ -55,7 +213,7 @@ export class EventL<T extends EventRecord> {
               lastDebouncedReference: null,
             }
           : null,
-      id: this.newId,
+      id,
       status,
       invokerLimit,
       hasInvokerLimit: invokerLimit !== -1,
@@ -82,9 +240,19 @@ export class EventL<T extends EventRecord> {
 
     return {
       cancel: () => (status.isCancelled = true),
+      id,
     };
   }
 
+  /**
+   * @template T - Event map
+   * @template V - event key
+   * @description Register interception invocation for an event
+   * @param {V} eventName - The event name to intercept
+   * @param {(args: F extends true ? T[V] : Readonly<T[V]>) => unknown} invoker - The callback function to be invoked during interception
+   * @param {boolean} mutable - while intercepting arguments can be both immutable or mutable
+   * @returns {void}
+   */
   intercept<V extends keyof T, F extends boolean>(
     eventName: V,
     invoker: (args: F extends true ? T[V] : Readonly<T[V]>) => unknown,
@@ -96,224 +264,138 @@ export class EventL<T extends EventRecord> {
     ] as Interceptors<T, keyof T>);
   }
 
-  private async invokeMiddlewareInterceptors<V extends keyof T>({
-    eventName,
-    middlewares,
-    args,
-    status,
-  }: {
-    eventName: V;
-    middlewares: Middlewares<T, V>;
-    args: T[V];
-    status: EventData<T, V>["status"];
-  }) {
-    for (const c of middlewares ?? []) {
-      try {
-        if (!!status?.isCancelled) return false;
-        const resp = await c(eventName, args);
-        if (resp === false) return false;
-      } catch (e) {
-        return false;
-      }
-    }
-    if (!!status?.isCancelled) return false;
-    (this.interceptors.get(eventName) ?? []).forEach(({ invoker, mutable }) => {
-      if (mutable) {
-        invoker(args);
-        return;
-      }
-      if (typeof structuredClone === "undefined") {
-        console.warn(
-          "[interceptor] structuredClone not supported for immutable arguments : falling back to mutuable"
-        );
-        invoker(args);
-        return;
-      }
-      invoker?.(Object.freeze(structuredClone(args)));
-    });
-    return true;
-  }
-
-  private getEvents<V extends keyof T>(
-    eventName: V,
-    options?: Partial<{ namespace: boolean; debounceOnly: boolean }>
-  ): Array<EventData<T, keyof T>> {
-    const currentEvents: Array<EventData<T, keyof T>> = [];
-    for (let [name, e] of this.events) {
-      if (
-        (!!options?.namespace &&
-          (name as string)?.startsWith(eventName as string) &&
-          eventName !== name) ||
-        (!options?.namespace && eventName === name)
-      ) {
-        if (!options?.debounceOnly) {
-          currentEvents.push(...e);
-          continue;
-        }
-        const debouncedEvents = e.filter((v) => !!v.debouceFactory?.debounce);
-        if (debouncedEvents.length > 0) {
-          currentEvents.push(...debouncedEvents);
-        }
-      }
-    }
-    return currentEvents;
-  }
-
-  async emitDebounce<V extends keyof T>(
-    eventName: V,
-    args: T[V],
-    options?: Partial<{
-      namespace: string;
-    }>
-  ): Promise<void> {
-    const currentEvents: Array<EventData<T, keyof T>> = this.getEvents(
-      eventName,
-      {
-        debounceOnly: true,
-        namespace: !!options?.namespace,
-      }
-    );
-
-    for (const eventBlob of currentEvents) {
-      const { invoker, status, debouceFactory } = eventBlob;
-      if (!!status?.isCancelled) return;
-      debouceFactory?.lastDebouncedReference &&
-        clearTimeout(debouceFactory?.lastDebouncedReference);
-      eventBlob.debouceFactory!.lastDebouncedReference = setTimeout(() => {
-        invoker(args);
-      }, debouceFactory!.debounce);
-    }
-  }
-
-  private async emitQueue<V extends keyof T>(
-    event: EventData<T, keyof T>,
-    args: T[V],
-    eventName: V
-  ) {
-    if (!event.queue) return;
-    event.queue.invokers.push({
-      args,
-      cb: event.invoker,
-    });
-    if (event.queue.inProgress) return;
-    while (event.queue.invokers.length > 0) {
-      event.queue.inProgress = true;
-      const current = event.queue.invokers.shift()!;
-      if (event.status?.isCancelled) return;
-      if (
-        !(await this.invokeMiddlewareInterceptors({
-          eventName,
-          middlewares: event.middlewares ?? [],
-          args: current?.args,
-          status: event.status,
-        }))
-      ) {
-        continue;
-      }
-      if (event.status?.isCancelled) return;
-      await event.invoker(current.args);
-    }
-    event.queue.inProgress = false;
-  }
-
-  private handleDebouce(event: EventData<T, keyof T>, fn: () => any) {
-    const { debouceFactory } = event;
-    if (!!debouceFactory) {
-      debouceFactory?.lastDebouncedReference &&
-        clearTimeout(debouceFactory?.lastDebouncedReference);
-      event.debouceFactory!.lastDebouncedReference = setTimeout(
-        fn,
-        debouceFactory.debounce
-      );
-    }
-  }
-
-  async emit<V extends keyof T>(
+  /**
+   * @template T - Event map
+   * @template V - event key
+   * @description emission an event invocation synchronously - middlewares & interceptors are executed synchronously, debouce & queues are ignored
+   * @param {V} eventName - The event name for emission
+   * @param {any} args - argument of the registered event
+   * @param {{namespace: boolean}} [options] - if true emit all events with eventName prefix
+   * @returns {void}
+   */
+  emit<V extends keyof T>(
     eventName: V,
     args: T[V],
     options?: Partial<{
       namespace: boolean;
     }>
-  ): Promise<void> {
-    const currentEvents: Array<EventData<T, keyof T>> = this.getEvents(
+  ): void {
+    const currentEvents: Array<EventData<T, keyof T>> = this.#getEvents(
       eventName,
       {
         namespace: !!options?.namespace,
       }
     );
     currentEvents.forEach(async (eventBlob) => {
-      const {
-        middlewares,
-        invoker,
-        status,
-        debouceFactory,
-        queue,
-        hasInvokerLimit,
-      } = eventBlob;
-      if (debouceFactory && hasInvokerLimit) {
-        console.warn(
-          `[emit] ${eventName.toString()}: cannot execute debouce with invokerLimit - ignoring invocation`
-        );
-        return;
-      }
-      if (!this.updateInvoker(eventBlob)) return;
+      const { middlewares, invoker, status } = eventBlob;
+
       if (!!status?.isCancelled) return;
-      if (!!queue) {
-        if (!!debouceFactory) {
-          this.handleDebouce(eventBlob, () =>
-            this.emitQueue(eventBlob, args, eventName)
-          );
-          return;
-        }
-        this.emitQueue(eventBlob, args, eventName);
-        return;
-      }
+      if (!this.#updateInvoker(eventBlob)) return;
       if (
-        !(await this.invokeMiddlewareInterceptors({
+        !this.#invokeMiddlewareInterceptors({
           eventName,
           middlewares: middlewares ?? [],
           args,
           status: eventBlob.status,
-        }))
+        })
       ) {
         return;
       }
-      if (!!debouceFactory) {
-        this.handleDebouce(eventBlob, () => invoker(args));
-      } else {
-        invoker(args);
-      }
+      invoker(args);
     });
   }
 
-  async asyncEmit<V extends keyof T>(
+  /**
+   * @template T - Event map
+   * @template V - event key
+   * @description emission an event invocation asynchronously - middlewares & interceptors are executed async
+   * @param {V} eventName - The event name to emit async
+   * @param {any} args - argument of the registered event
+   * @param {{namespace: boolean}} [options] - if true emit all events with eventName prefix
+   * @returns {Promise<void>} - irrelvant return promise
+   */
+  async emitAsync<V extends keyof T>(
+    eventName: V,
+    args: T[V],
+    options?: Partial<{
+      namespace: boolean;
+    }>
+  ): Promise<void> {
+    const currentEvents: Array<EventData<T, keyof T>> = this.#getEvents(
+      eventName,
+      {
+        namespace: !!options?.namespace,
+      }
+    );
+    currentEvents.forEach(async (eventBlob) => {
+      const { middlewares, invoker, status, debouceFactory, queue } = eventBlob;
+
+      if (!!status?.isCancelled) return;
+      if (!!queue) {
+        if (!!debouceFactory) {
+          this.#handleDebouce(eventBlob, () => {
+            this.#emitQueue(eventBlob, args, eventName);
+          });
+          return;
+        }
+        this.#emitQueue(eventBlob, args, eventName);
+        return;
+      }
+
+      this.#handleDebouce(eventBlob, async () => {
+        if (!this.#updateInvoker(eventBlob)) return;
+        if (
+          !(await this.#invokeMiddlewareInterceptorsAsync({
+            eventName,
+            middlewares: middlewares ?? [],
+            args,
+            status: eventBlob.status,
+          }))
+        ) {
+          return;
+        }
+        invoker(args);
+      });
+    });
+  }
+
+  /**
+   * @template T - Event map
+   * @template V - event key
+   * @description all registered events are executed then promise is completed, debouce is ignored(warning)
+   * @param {V} eventName - The event name for emission
+   * @param {any} args - argument of the registered event
+   * @param {{namespace: boolean}} [options] - if true emit all events with eventName prefix
+   * @returns {Promise<void>} - once all registered events are completed promise is then resolved
+   */
+  async emitAll<V extends keyof T>(
     eventName: V,
     args: T[V],
     options?: Partial<{
       namespace: string;
     }>
   ) {
-    const currentEvents: Array<EventData<T, keyof T>> = this.getEvents(
+    const currentEvents: Array<EventData<T, keyof T>> = this.#getEvents(
       eventName,
       {
-        namespace: !!options?.namespace,
+        namespace: !!options?.namespace && options?.namespace.length > 0,
       }
     );
     const filteredEvents = currentEvents.filter((event) => {
       if (!!event?.debouceFactory) {
-        console.warn(
-          `[asyncEmit] ${eventName.toString()}: cannot execute debouce with asyncEmit - ignoring invocation`
+        this.logger.warn(
+          `[asyncEmit] ${eventName.toString()}: cannot execute debouce with emitAll - ignoring invocation`
         );
         return false;
       }
-      if (!this.updateInvoker(event)) return false;
+      if (!this.#updateInvoker(event)) return false;
       return true;
     });
     await Promise.all(
       (
         await Promise.all(
           filteredEvents.map((currentEvent) =>
-            this.invokeMiddlewareInterceptors({
+            this.#invokeMiddlewareInterceptorsAsync({
               eventName,
               middlewares: currentEvent?.middlewares ?? [],
               args,
@@ -327,14 +409,24 @@ export class EventL<T extends EventRecord> {
     );
   }
 
+  /**
+   * @template T - Event map
+   * @template V - event key
+   * @description remove specific event type
+   * @param {V} e - The event name
+   * @param {Function} fn - referenced function
+   * @returns {void}
+   */
   off<V extends keyof T>(e: V, fn: Function): void {
     if (typeof fn != "function") {
-      throw new Error("[off] expected function as an argument");
+      this.logger.throw("[off] expected function as an argument");
+      return;
     }
     if (fn.name.length === 0) {
-      throw new Error(
+      this.logger.throw(
         "[off] anonymous function do not hold references to the events map pool, pass referenced functions"
       );
+      return;
     }
     this.events.set(
       e,
