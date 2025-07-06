@@ -412,7 +412,7 @@ await delay(120);
 ### emitAll
 
 ```ts
-//simple queue
+//emit all will wait for all the handlers to complete - failed middlewares will be ignored in the promise pool
 const E = new EventFlux<{
   ADMIN: any;
 }>();
