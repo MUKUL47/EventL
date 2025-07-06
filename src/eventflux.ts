@@ -1,6 +1,6 @@
 import { Logger } from "./logger";
 
-export class EventL<T extends EventRecord> {
+export class EventFlux<T extends EventRecord> {
   private events: Map<keyof T, Array<EventData<T, keyof T>>>;
   private interceptors: Map<keyof T, Interceptors<T, keyof T>>;
   private id: number;
@@ -39,7 +39,7 @@ export class EventL<T extends EventRecord> {
     const { eventName, middlewares, args, status } = resp;
     for (const c of middlewares ?? []) {
       try {
-        if (!!status?.isCancelled) return false;
+        if (!!status?.isFrozen) return false;
         const resp = await c(eventName, args);
         if (resp === false) return false;
       } catch (e) {
@@ -56,7 +56,7 @@ export class EventL<T extends EventRecord> {
     const { eventName, middlewares, args, status } = resp;
     for (const c of middlewares ?? []) {
       try {
-        if (!!status?.isCancelled) return false;
+        if (!!status?.isFrozen) return false;
         const resp = c(eventName, args);
         if (resp === false) return false;
       } catch (e) {
@@ -91,7 +91,7 @@ export class EventL<T extends EventRecord> {
     resp: MiddlewareInterceptorsArgs<T, V>
   ) {
     if (!(await this.#invokeMiddlewaresAsync(resp))) return false;
-    if (!!resp?.status?.isCancelled) return false;
+    if (!!resp?.status?.isFrozen) return false;
     this.#invokeInterceptors(resp);
     return true;
   }
@@ -99,7 +99,7 @@ export class EventL<T extends EventRecord> {
   #invokeMiddlewareInterceptors<V extends keyof T>(
     resp: MiddlewareInterceptorsArgs<T, V>
   ) {
-    if (!this.#invokeMiddlewares(resp) || !!resp?.status?.isCancelled)
+    if (!this.#invokeMiddlewares(resp) || !!resp?.status?.isFrozen)
       return false;
     this.#invokeInterceptors(resp);
     return true;
@@ -135,7 +135,7 @@ export class EventL<T extends EventRecord> {
     args: T[V],
     eventName: V
   ) {
-    if (!event.queue || event.status?.isCancelled) return;
+    if (!event.queue || event.status?.isFrozen) return;
     if (!this.#updateInvoker(event)) return;
     event.queue.invokers.push({
       args,
@@ -145,7 +145,7 @@ export class EventL<T extends EventRecord> {
     while (event.queue.invokers.length > 0) {
       event.queue.inProgress = true;
       const current = event.queue.invokers.shift()!;
-      if (event.status?.isCancelled) return;
+      if (event.status?.isFrozen) return;
       if (
         !(await this.#invokeMiddlewareInterceptorsAsync({
           eventName,
@@ -156,7 +156,7 @@ export class EventL<T extends EventRecord> {
       ) {
         continue;
       }
-      if (event.status?.isCancelled) return;
+      if (event.status?.isFrozen) return;
       await event.invoker(current.args);
     }
     event.queue.inProgress = false;
@@ -197,7 +197,7 @@ export class EventL<T extends EventRecord> {
     }
     const currentEvent = isNew ?? this.events.get(eventName);
     const status: EventData<T, V>["status"] = {
-      isCancelled: false,
+      isFrozen: false,
     };
     const invokerLimit =
       !options?.invokeLimit || options?.invokeLimit === 0
@@ -239,7 +239,8 @@ export class EventL<T extends EventRecord> {
       : this.events.set(eventName, currentEvent!);
 
     return {
-      cancel: () => (status.isCancelled = true),
+      freeze: () => (status.isFrozen = true),
+      unFreeze: () => (status.isFrozen = false),
       id,
     };
   }
@@ -289,7 +290,7 @@ export class EventL<T extends EventRecord> {
     currentEvents.forEach(async (eventBlob) => {
       const { middlewares, invoker, status } = eventBlob;
 
-      if (!!status?.isCancelled) return;
+      if (!!status?.isFrozen) return;
       if (!this.#updateInvoker(eventBlob)) return;
       if (
         !this.#invokeMiddlewareInterceptors({
@@ -330,7 +331,7 @@ export class EventL<T extends EventRecord> {
     currentEvents.forEach(async (eventBlob) => {
       const { middlewares, invoker, status, debouceFactory, queue } = eventBlob;
 
-      if (!!status?.isCancelled) return;
+      if (!!status?.isFrozen) return;
       if (!!queue) {
         if (!!debouceFactory) {
           this.#handleDebouce(eventBlob, () => {
@@ -431,6 +432,31 @@ export class EventL<T extends EventRecord> {
     this.events.set(
       e,
       this.events.get(e).filter((a) => a.invoker != fn)
+    );
+  }
+
+  /**
+   * @template T - Event map
+   * @template V - event key
+   * @description deregister interception invocation for an event
+   * @param {V} eventName - The event name to intercept
+   * @param {Function} invoker - The callback function to be removed - must be referenced
+   * @returns {void}
+   */
+  interceptOff<V extends keyof T>(e: V, fn: Function) {
+    if (typeof fn != "function") {
+      this.logger.throw("[off] expected function as an argument");
+      return;
+    }
+    if (fn.name.length === 0) {
+      this.logger.throw(
+        "[off] anonymous function do not hold references to the events map pool, pass referenced functions"
+      );
+      return;
+    }
+    this.interceptors.set(
+      e,
+      this.interceptors.get(e).filter((a) => a.invoker != fn)
     );
   }
 }

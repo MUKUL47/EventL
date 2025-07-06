@@ -1,10 +1,10 @@
-import { EventL } from "../eventL";
+import { EventFlux } from "../eventflux";
 const delay = async (n = 0) =>
   await new Promise((resolve) => setTimeout(resolve, n));
 
 describe("Debounce", () => {
   test("Should delay event emission until after the specified debounce interval", async () => {
-    const E = new EventL<{ TEST: number }>();
+    const E = new EventFlux<{ TEST: number }>({ suppressWarnings: true });
     const fn = jest.fn();
     E.on("TEST", fn, {
       debounce: 300,
@@ -19,7 +19,7 @@ describe("Debounce", () => {
   });
 
   test("Should reset debounce timer if events keep firing within the debounce window", async () => {
-    const E = new EventL<{ SEARCH: string }>();
+    const E = new EventFlux<{ SEARCH: string }>({ suppressWarnings: true });
     const fn = jest.fn();
     E.on("SEARCH", fn, {
       debounce: 300,
@@ -35,7 +35,7 @@ describe("Debounce", () => {
   });
 
   test("should debounce multiple emit bursts independently", async () => {
-    const E = new EventL<{ SEARCH: string }>();
+    const E = new EventFlux<{ SEARCH: string }>({ suppressWarnings: true });
     const fn = jest.fn();
 
     E.on("SEARCH", fn, {
@@ -58,7 +58,7 @@ describe("Debounce", () => {
   });
 
   test("Should not invoke with emitAll", async () => {
-    const E = new EventL<{ TEST: number }>();
+    const E = new EventFlux<{ TEST: number }>({ suppressWarnings: true });
     const fn = jest.fn();
     E.on("TEST", fn, {
       debounce: 300,
@@ -73,7 +73,7 @@ describe("Debounce", () => {
   });
 
   test("Should invoke with invokerLimit", async () => {
-    const E = new EventL<{ TEST: number }>();
+    const E = new EventFlux<{ TEST: number }>({ suppressWarnings: true });
     const fn = jest.fn();
     E.on("TEST", fn, {
       debounce: 50,

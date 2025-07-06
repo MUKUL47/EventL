@@ -1,10 +1,10 @@
-import { EventL } from "../eventL";
+import { EventFlux } from "../eventflux";
 const delay = async (n = 0) =>
   await new Promise((resolve) => setTimeout(resolve, n));
 
 describe("Emission", () => {
   test("should emit simple invocation", async () => {
-    const E = new EventL<{ TEST: any }>();
+    const E = new EventFlux<{ TEST: any }>();
     const fn = jest.fn();
     E.on("TEST", () => fn());
     E.emit("TEST", 2);
@@ -12,7 +12,7 @@ describe("Emission", () => {
   });
 
   test("should emit multiple invocation", () => {
-    const E = new EventL<{ TEST: any }>();
+    const E = new EventFlux<{ TEST: any }>();
     const fn = jest.fn();
     E.on("TEST", () => fn());
     E.emit("TEST", 2);
@@ -24,7 +24,7 @@ describe("Emission", () => {
 
   describe("middlewares", () => {
     test("should execute middlewares without fail before invokation", async () => {
-      const E = new EventL<{ TEST: { resp: number } }>();
+      const E = new EventFlux<{ TEST: { resp: number } }>();
       const fn = jest.fn();
       const fnMiddle = jest.fn();
       E.on(
@@ -47,7 +47,7 @@ describe("Emission", () => {
     });
 
     test("should execute middlewares and stop the invocation", async () => {
-      const E = new EventL<{ ONLY_ODD: { resp: number } }>();
+      const E = new EventFlux<{ ONLY_ODD: { resp: number } }>();
       const fn = jest.fn();
       E.on(
         "ONLY_ODD",
@@ -66,7 +66,7 @@ describe("Emission", () => {
     });
 
     test("should execute middlewares and stop the invocation with conditions", async () => {
-      const E = new EventL<{ ODD_LESS_THAN_10: { resp: number } }>();
+      const E = new EventFlux<{ ODD_LESS_THAN_10: { resp: number } }>();
       const fn = jest.fn();
       E.on(
         "ODD_LESS_THAN_10",

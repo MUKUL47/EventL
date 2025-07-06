@@ -1,11 +1,11 @@
-import { EventL } from "../eventL";
+import { EventFlux } from "../eventflux";
 
 const delay = async (n = 0) =>
   await new Promise((resolve) => setTimeout(resolve, n));
 
 describe("Namespace", () => {
   test("Should emit all the decendants of the namespace prefix", async () => {
-    const E = new EventL<{
+    const E = new EventFlux<{
       ADMIN: any;
       "ADMIN:USER": any;
       "ADMIN:USER:CREATE": any;

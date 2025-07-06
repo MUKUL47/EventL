@@ -29,7 +29,7 @@ type EventData<T extends EventRecord, V extends keyof T> = {
   invoker: Invoker<T, V>;
   middlewares?: Middlewares<T, V>;
   status: {
-    isCancelled: boolean;
+    isFrozen: boolean;
   };
   id: number;
 
@@ -61,7 +61,8 @@ type EventData<T extends EventRecord, V extends keyof T> = {
 };
 
 type EventDataOnReturn = {
-  cancel: () => void;
+  freeze: () => void;
+  unFreeze: () => void;
   id: number;
 };
 type EventDataOnParam<T extends EventRecord, V extends keyof T> = {

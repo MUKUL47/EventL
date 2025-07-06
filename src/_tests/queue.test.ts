@@ -1,4 +1,4 @@
-import { EventL } from "../eventL";
+import { EventFlux } from "../eventflux";
 
 const delay = async (n = 0) =>
   await new Promise((resolve) => setTimeout(resolve, n));
@@ -7,13 +7,13 @@ describe("Queue", () => {
   test("should emit queue in a sequence", async () => {
     const fn = jest.fn();
     let p = "";
-    const E = new EventL<{
+    const E = new EventFlux<{
       ADMIN: {
         delay: number;
         data: number;
       };
     }>();
-    const { cancel } = E.on(
+    E.on(
       "ADMIN",
       (arg) => {
         p = p + `${arg.data}`;
@@ -37,7 +37,7 @@ describe("Queue", () => {
   });
   test("should respect invokeLimit inside queue", async () => {
     let out = "";
-    const E = new EventL<{
+    const E = new EventFlux<{
       JOB: { delay: number; data: string };
     }>();
 
@@ -66,7 +66,7 @@ describe("Queue", () => {
   });
 
   test("should enqueue only last value after debounce delay", async () => {
-    const E = new EventL<{
+    const E = new EventFlux<{
       SEARCH: string;
     }>();
     let output = "";
@@ -99,7 +99,7 @@ describe("Queue", () => {
   });
   test("should skip first emit and process only 2 and 3", async () => {
     let output = "";
-    const E = new EventL<{ ADMIN: number }>();
+    const E = new EventFlux<{ ADMIN: number }>();
 
     E.on(
       "ADMIN",
@@ -124,13 +124,13 @@ describe("Queue", () => {
   test("should cancel queue in between and stop emission aftewards", async () => {
     const fn = jest.fn();
     let p = "";
-    const E = new EventL<{
+    const E = new EventFlux<{
       ADMIN: {
         delay: number;
         data: number;
       };
     }>();
-    const { cancel } = E.on(
+    const { freeze } = E.on(
       "ADMIN",
       (arg) => {
         p = p + `${arg.data}`;
@@ -144,7 +144,7 @@ describe("Queue", () => {
         withQueue: true,
       }
     );
-    setTimeout(cancel, 620);
+    setTimeout(freeze, 620);
     E.emitAsync("ADMIN", { delay: 500, data: 1 });
     E.emitAsync("ADMIN", { delay: 100, data: 2 });
     E.emitAsync("ADMIN", { delay: 20, data: 3 });
@@ -154,7 +154,7 @@ describe("Queue", () => {
     expect(p).toBe("12");
   });
   test("should queue emits even if previous is running", async () => {
-    const E = new EventL<{ TASK: number }>();
+    const E = new EventFlux<{ TASK: number }>();
     let result = "";
 
     E.on(

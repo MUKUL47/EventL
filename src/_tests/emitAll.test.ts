@@ -1,11 +1,11 @@
-import { EventL } from "../eventL";
+import { EventFlux } from "../eventflux";
 
 const delay = async (n = 0) =>
   await new Promise((resolve) => setTimeout(resolve, n));
 
 describe("AsyncEmit", () => {
   it("should complete emit promise when all registered invokers are completed", async () => {
-    const E = new EventL<{
+    const E = new EventFlux<{
       ADMIN: any;
     }>();
     const fn = jest.fn();
@@ -41,7 +41,7 @@ describe("AsyncEmit", () => {
   });
 
   it("should complete emit promise when all registered invokers are completed with 1 failed middleware", async () => {
-    const E = new EventL<{
+    const E = new EventFlux<{
       ADMIN: any;
     }>();
     const fn = jest.fn();
@@ -86,7 +86,7 @@ describe("AsyncEmit", () => {
     });
   });
   it("should proceed when one middleware throws error", async () => {
-    const E = new EventL<{ ADMIN: any }>();
+    const E = new EventFlux<{ ADMIN: any }>({});
     let ran = { handler1: false, handler2: false };
 
     E.on(
@@ -112,7 +112,7 @@ describe("AsyncEmit", () => {
   });
 
   it("should run multiple middlewares in sequence before handler", async () => {
-    const E = new EventL<{ ADMIN: { val: number } }>();
+    const E = new EventFlux<{ ADMIN: { val: number } }>();
     let order: string[] = [];
 
     E.on(
@@ -164,7 +164,7 @@ describe("AsyncEmit", () => {
   });
 
   it("should work as intened with invoker", async () => {
-    const E = new EventL<{
+    const E = new EventFlux<{
       ADMIN: any;
     }>();
     const fn = jest.fn();
