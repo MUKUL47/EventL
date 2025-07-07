@@ -7,35 +7,38 @@
 - [**Emit** ](#simple-sync-emission)
   Synchronous emission to all listeners with invokerLimit, middlewares & interceptors. Skips debounce, queues, and async.
 
-- **emitAsync**  
+- [**emitAsync** ](#emitasync)
   Async emission. Executes all registered listeners, supports middlewares, interceptors, debounce, invokerLimit and queues.
 
-- **emitAll**  
+- [**emitAll**](#emitAll)  
   Waits until all registered listeners for an event (including async ones) are completed (i.e., Promise.all).
 
-- **debounce**  
+- [**debounce** ](#debounce)  
   Debounced invocation per listener. Prevents multiple rapid emissions from reaching the handler.
 
-- **InvokeLimit**  
+- [**InvokeLimit** ](#invokelimit)
   Limit number of invocations for a event handler.
 
-- **priority**  
+- [**Priority** ](#priority)
   Controls the order in which listeners are executed. Lower numbers run earlier. Only SYNC
 
-- **Queues**  
+- [**Queues** ](#queue)  
   Ensures all emissions of an event are processed in order. Each emission waits for the previous one to complete (useful for async sequencing).
 
-- **Middlewares**  
+- [**Middlewares**](#middlewares)([**Async**](#middlewares-with-async))
   Transform, inspect, or block event payloads before reaching any listener. Runs per event type.
 
-- **Interceptors**  
+- [**Interceptors**](#interceptors)
   Advanced control layer for observing, modifying, or stopping emissions. Can be dynamically registered/unregistered. Support both mutable and immutable arguments.
 
-- **Freeze / Unfreeze**  
+- [**Freeze / Unfreeze** ](#freeze-unfreeze)
   Temporarily toggle between freeze/unfreeze processing events for a specific event.
 
-- **Namespaces**  
+- [**Namespaces**](#namespaces)
   Logical grouping of listeners. Enables easier management (Support all features).
+
+- [**Fine grain controls** ](#controller)
+  event registration returns variety of controls like freeze, unfreeze, updatePriority, toggleQueue, updateDebounce during runtime
 
 ---
 
@@ -55,7 +58,7 @@
 | Namespace           | ✅     | ✅          | ✅        |
 | Waits all Listeners | ❌     | ❌          | ✅        |
 
-## Examples
+## API
 
 ### Simple sync emission
 
@@ -155,6 +158,26 @@ E.on(
 E.emitAsync("TEST", { resp: 10 }); //12
 ```
 
+### EmitAsync
+
+```ts
+//  Async emission. Executes all registered listeners, supports middlewares, interceptors, debounce, invokerLimit and queues.
+
+const E = new EventFlux<{ TEST: number }>({ suppressWarnings: true });
+E.on("TEST", console.log, {
+  debounce: 50,
+  invokeLimit: 2,
+});
+
+E.emitAsync("TEST", 2);
+setTimeout(() => E.emitAsync("TEST", 1), 100);
+E.emitAsync("TEST", 5);
+setTimeout(() => E.emitAsync("TEST", 57), 80);
+setTimeout(() => E.emitAsync("TEST", 212), 120);
+await delay(500);
+//80 & 120
+```
+
 ### Interceptors
 
 ```ts
@@ -210,7 +233,7 @@ E.on("TEST", console.log);
 E.emit("TEST", { resp: 2 }); //4
 ```
 
-### namespaces
+### Namespaces
 
 ```ts
 const E = new EventFluxFlow<{
@@ -228,7 +251,7 @@ E.emit("ADMIN:USER", true, { namespace: true }); //ADMIN:USER:CREATE
 E.emit("ADMIN", true); //ADMIN
 ```
 
-### Priorty
+### Priority
 
 ```ts
 //only supported for .emit sync events
@@ -247,7 +270,7 @@ E.emit("ADMIN", true);
 //[1,2,3]
 ```
 
-### invokeLimit
+### InvokeLimit
 
 ```ts
 const E = new EventFluxFlow<{ TEST: number }>({ suppressWarnings: true });
@@ -260,7 +283,7 @@ E.emit("TEST", 21);
 E.emit("TEST", 5); //this wont be invoked since limit reacted
 ```
 
-### debounce
+### Debounce
 
 ```ts
 const E = new EventFluxFlow<{ SEARCH: string }>({ suppressWarnings: true });
@@ -507,9 +530,31 @@ await E.emitAll("ADMIN", true);
 //{ handler1: false, handler2: true }
 ```
 
-### Very fine grain control over event attributes via controller
+### Freeze Unfreeze
 
 ```ts
+const E = new EventFlux<{
+  ADMIN: any;
+}>();
+const { freeze, unFreeze } = E.on("ADMIN", console.log);
+E.emit("ADMIN", true);
+E.emit("ADMIN", true);
+//true
+//true
+freeze();
+E.emit("ADMIN", true);
+//no more emission
+unFreeze(); //unpause emission
+jest.resetAllMocks();
+E.emit("ADMIN", true);
+//true
+```
+
+### Controller
+
+```ts
+//Very fine grain control over event attributes via controller
+
 //attach middleware from controls
 import { EventFluxFlow as EventFlux } from "../eventfluxflow";
 const E = new EventFlux<{
