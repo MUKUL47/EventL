@@ -247,6 +247,7 @@ export class EventFluxFlow<T extends EventRecord> {
       freeze: () => (status.isFrozen = true),
       unFreeze: () => (status.isFrozen = false),
       toggleQueue: (flag) => {
+        if (finalEvent.isQueue == flag) return;
         finalEvent.isQueue = flag;
         finalEvent.queue = addQueue(!!flag);
       },
