@@ -259,6 +259,7 @@ export class EventFluxFlow<T extends EventRecord> {
       },
       useMiddleware: (...m) => finalEvent.middlewares?.push(...m),
       id,
+      off: () => this.off(eventName, invoker),
     };
   }
 

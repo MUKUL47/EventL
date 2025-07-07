@@ -68,6 +68,7 @@ type EventDataOnReturn = {
   updateInvokerLimit: (limit: number) => void;
   updateDebounce: (P: number) => void;
   id: number;
+  off: () => void;
 };
 type EventDataOnParam<T extends EventRecord, V extends keyof T> = {
   middlewares?: Middlewares<T, V>;
