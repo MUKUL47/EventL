@@ -4,7 +4,7 @@
 
 ## Features
 
-- **emit**  
+- [**Emit** ](#simple-sync-emission)
   Synchronous emission to all listeners with invokerLimit, middlewares & interceptors. Skips debounce, queues, and async.
 
 - **emitAsync**  
@@ -39,12 +39,6 @@
 
 ---
 
-## Installation
-
-```bash
-npm install orchestify
-```
-
 ### Emission Feature Matrix
 
 | Feature             | `emit` | `emitAsync` | `emitAll` |
@@ -66,6 +60,8 @@ npm install orchestify
 ### Simple sync emission
 
 ```ts
+import { EventFluxFlow } from "eventfluxflow";
+
 const E = new EventFluxFlow<{ EVENT: string }>({
   suppressWarnings: true,
   suppressErrors: true,
@@ -509,4 +505,88 @@ E.on("ADMIN", async () => {
 await E.emitAll("ADMIN", true);
 //one middleware failed that handler is ignored
 //{ handler1: false, handler2: true }
+```
+
+### Very fine grain control over event attributes via controller
+
+```ts
+//attach middleware from controls
+import { EventFluxFlow as EventFlux } from "../eventfluxflow";
+const E = new EventFlux<{
+  ADMIN: any;
+}>();
+let f = {};
+const controls = E.on("ADMIN", (c) => (f = c));
+E.emit("ADMIN", {});
+controls.useMiddleware((a, c) => (c.value = true));
+controls.useMiddleware((a, c) => {
+  if (c.block) return false;
+  c.value1 = true;
+});
+E.emit("ADMIN", {});
+//f = { value: true, value1: true }
+f = {};
+E.emit("ADMIN", { block: true });
+//f = {}
+
+//update invoke limit on the fly
+const E = new EventFlux();
+let s = [];
+const c = E.on("1", (v) => s.push(v), { invokeLimit: 2 });
+E.emit("1", 1);
+E.emit("1", 2);
+E.emit("1", 3);
+//s = [1, 2];
+c.updateInvokerLimit(1);
+E.emit("1", 3);
+//s = [1, 2, 3];
+E.emit("1", 3);
+//s = [1, 2, 3];
+
+// update debounce with ease :)
+const E = new EventFlux<{ TEST: number }>({ suppressWarnings: true });
+const c = E.on("TEST", console.log, {
+  debounce: 60,
+});
+setTimeout(() => E.emitAsync("TEST", 2), 55);
+setTimeout(() => E.emitAsync("TEST", 5), 22);
+await delay(120);
+//2
+c.updateDebounce(20);
+setTimeout(() => E.emitAsync("TEST", 2), 55);
+setTimeout(() => E.emitAsync("TEST", 5), 25);
+await delay(100);
+//5 & 2
+
+//transform ordinary event to queue
+let out = "";
+const E = new EventFlux<{
+  JOB: { delay: number; data: string };
+}>();
+
+const c = E.on(
+  "JOB",
+  async (arg) => {
+    out += arg.data;
+  },
+  {
+    middlewares: [
+      async (_, arg) => {
+        await delay(arg.delay);
+      },
+    ],
+  }
+);
+
+E.emitAsync("JOB", { delay: 100, data: "A" });
+E.emitAsync("JOB", { delay: 5, data: "B" });
+await delay(350);
+//"BA"
+out = "";
+c.toggleQueue(true);
+E.emitAsync("JOB", { delay: 100, data: "A" });
+E.emitAsync("JOB", { delay: 5, data: "B" });
+E.emitAsync("JOB", { delay: 1, data: "C" });
+await delay(350);
+//"ABC"
 ```

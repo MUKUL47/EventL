@@ -204,15 +204,25 @@ export class EventFluxFlow<T extends EventRecord> {
         ? -1
         : options?.invokeLimit;
     const id = this.#newId;
-    currentEvent?.push({
+    const addDebounce = (n?: number) =>
+      n && !isNaN(n)
+        ? {
+            debounce: n ?? 0,
+            lastDebouncedReference: null,
+          }
+        : null;
+
+    const addQueue = (flag?: boolean) =>
+      !!flag
+        ? {
+            finished: false,
+            inProgress: false,
+            invokers: [],
+          }
+        : null;
+    const finalEvent = {
       invoker: invoker as Invoker<T, keyof T>,
-      debouceFactory:
-        options?.debounce && !isNaN(options?.debounce)
-          ? {
-              debounce: options?.debounce ?? 0,
-              lastDebouncedReference: null,
-            }
-          : null,
+      debouceFactory: addDebounce(options?.debounce),
       id,
       status,
       invokerLimit,
@@ -220,16 +230,11 @@ export class EventFluxFlow<T extends EventRecord> {
       invokerFinished: false,
       isQueue: !!options?.withQueue,
       priority: options?.priority ?? Infinity,
-      queue: options?.withQueue
-        ? {
-            finished: false,
-            inProgress: false,
-            invokers: [],
-          }
-        : null,
+      queue: addQueue(!!options?.withQueue),
 
       middlewares: options?.middlewares ?? [],
-    });
+    };
+    currentEvent?.push(finalEvent);
 
     options?.priority
       ? this.events.set(
@@ -241,6 +246,17 @@ export class EventFluxFlow<T extends EventRecord> {
     return {
       freeze: () => (status.isFrozen = true),
       unFreeze: () => (status.isFrozen = false),
+      toggleQueue: (flag) => {
+        finalEvent.isQueue = flag;
+        finalEvent.queue = addQueue(!!flag);
+      },
+      updateDebounce: (n) => (finalEvent.debouceFactory = addDebounce(n)),
+      updateInvokerLimit: (n) => {
+        finalEvent.invokerLimit = n;
+        finalEvent.hasInvokerLimit = n !== -1;
+        finalEvent.invokerFinished = !finalEvent.hasInvokerLimit;
+      },
+      useMiddleware: (...m) => finalEvent.middlewares?.push(...m),
       id,
     };
   }

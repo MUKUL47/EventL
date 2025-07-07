@@ -63,6 +63,10 @@ type EventData<T extends EventRecord, V extends keyof T> = {
 type EventDataOnReturn = {
   freeze: () => void;
   unFreeze: () => void;
+  useMiddleware: (...middlewares: Middleware<T, V>[]) => void;
+  toggleQueue: (flag: boolean) => void;
+  updateInvokerLimit: (limit: number) => void;
+  updateDebounce: (P: number) => void;
   id: number;
 };
 type EventDataOnParam<T extends EventRecord, V extends keyof T> = {
