@@ -83,4 +83,35 @@ type MiddlewareInterceptorsArgs<T, V> = {
   middlewares: Middlewares<T, V>;
   args: T[V];
   status: EventData<T, V>["status"];
+  id: number;
 };
+
+type EmitAsyncListenerArgs<T extends keyof EmitAsyncListeners> = Parameters<
+  EmitAsyncListeners[T]
+>;
+
+type EmitAsyncListeners = {
+  onInvoke: (handlerId: number) => void;
+  onMiddlewareHalt: (handlerId: number, middlewareIndex: number) => void;
+  onQueued: (handlerId: number, queueIdx: number) => void;
+};
+
+type AsyncListenerType = {
+  [P in keyof EmitAsyncListeners]?: (
+    ...cb: EmitAsyncListenerArgs<P>
+  ) => any | undefined;
+};
+
+type EmitAsyncReturn = {
+  [P in keyof EmitAsyncListeners]: (
+    cb: (...arg: EmitAsyncListenerArgs<P>) => any
+  ) => any;
+};
+type EmitAsync<Response extends boolean = false, V extends keyof T = any> = (
+  eventName: V,
+  args: T[V],
+  options?: {
+    namespace?: boolean;
+    isAtomic?: Response;
+  }
+) => Response extends true ? Promise<any> : EmitAsyncReturn;
