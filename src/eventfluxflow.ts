@@ -362,10 +362,7 @@ export class EventFluxFlow<T extends EventRecord> {
         namespace: !!options?.namespace,
       }
     );
-    if (
-      !!options?.isAtomic &&
-      (currentEvents.length > 1 || currentEvents.length === 0)
-    ) {
+    if (!!options?.isAtomic && currentEvents.length !== 0) {
       this.logger.throw(
         "[emitAsync] with atomic response should only have 1 registered handler, for more than 1 handlers in Promise.all mode use emitAll"
       );
@@ -374,7 +371,7 @@ export class EventFluxFlow<T extends EventRecord> {
     const listeners: AsyncListenerType = {};
     let atomicPromiseFn = {
       resolve: (r: ConstructorParameters<typeof Promise>["0"]) => {},
-      reject: () => {},
+      reject: (r: string) => {},
     };
     const atomicPromise = new Promise((r, reject) => {
       atomicPromiseFn.resolve = r;
@@ -382,7 +379,12 @@ export class EventFluxFlow<T extends EventRecord> {
     });
     currentEvents.forEach(async (eventBlob) => {
       const { middlewares, invoker, status, debouceFactory, queue } = eventBlob;
-      if (!!status?.isFrozen) return;
+      if (!!status?.isFrozen) {
+        if (!!options?.isAtomic) {
+          atomicPromiseFn.reject("[Reject][emitAsync] handler is frozen");
+        }
+        return;
+      }
       if (!!queue) {
         if (!!debouceFactory) {
           this.#handleDebouce(eventBlob, () =>
