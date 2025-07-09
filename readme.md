@@ -1,71 +1,87 @@
 # EventFluxFlow
 
-## A feature-rich event orchestration library that goes far beyond just a "Event Emitter"
+## More Than Just an "Event Emitter" — A Complete Event Orchestration Toolkit EventFluxFlow isn’t your typical event emitter. It’s packed with powerful features that give you full control over how events flow in your app — from sync and async handling to middlewares, queues, priorities, and more. Whether you’re building simple apps or complex systems, it helps you manage events cleanly and efficiently.
 
-## Features
+# Features
 
-- [**Emit** ](#simple-sync-emission)
-  Synchronous emission to all listeners with invokerLimit, middlewares & interceptors. Skips debounce, queues, and async.
+## Emission Methods
 
-- [**emitAsync** ](#emitasync)
-  Async emission. Executes all registered listeners, supports middlewares, interceptors, debounce, invokerLimit and queues.
+- [**Emit**](#simple-sync-emission)  
+  Synchronous emission to all listeners with invokeLimit, middlewares & interceptors. Skips debounce, queues, and async.
+
+- [**emitAsync**](#emitasync)  
+  Async emission. Executes all registered listeners, supports middlewares, interceptors, debounce, invokeLimit, and queues.
 
 - [**emitAll**](#emitall)  
   Waits until all registered listeners for an event (including async ones) are completed (i.e., Promise.all).
 
-- [**debounce** ](#debounce)  
-  Debounced invocation per listener. Prevents multiple rapid emissions from reaching the handler.
+## Atomic Emission
 
-- [**InvokeLimit** ](#invokelimit)
-  Limit number of invocations for a event handler.
+- [**Atomic emission async**](#atomic-emission-async)  
+  `emitAsync` with atomic flag `true` returns a promise resolved/rejected based on a single handler's response. Only one handler allowed. Includes freeze, middleware halt, invokeLimit checks. 100% TypeScript generic support.
 
-- [**Priority** ](#priority)
-  Controls the order in which listeners are executed. Lower numbers run earlier. Only SYNC
+- [**Atomic emission sync**](#atomic-emission-sync)  
+  `emit` with atomic flag `true` returns the handler’s synchronous return value. Only one handler allowed. Includes freeze, middleware halt, invokeLimit checks. 100% TypeScript generic support.
 
-- [**Queues** ](#queue)  
+## Event Control Features
+
+- [**Queues**](#queue)  
   Ensures all emissions of an event are processed in order. Each emission waits for the previous one to complete (useful for async sequencing).
 
-- [**Middlewares**](#middlewares)([**Async**](#middlewares-with-async))
+- [**debounce**](#debounce)  
+  Debounced invocation per listener. Prevents multiple rapid emissions from reaching the handler.
+
+- [**InvokeLimit**](#invokelimit)  
+  Limits the number of invocations allowed for an event handler.
+
+- [**Priority**](#priority)  
+  Controls the order in which listeners are executed. Lower numbers run earlier. (SYNC only)
+
+- [**Freeze / Unfreeze**](#freeze-unfreeze)  
+  Temporarily pause or resume processing events for a specific event.
+
+## Middleware & Interception
+
+- [**Middlewares**](#middlewares) ([**Async**](#middlewares-with-async))  
   Transform, inspect, or block event payloads before reaching any listener. Runs per event type.
 
-- [**Interceptors**](#interceptors)
-  Advanced control layer for observing, modifying, or stopping emissions. Can be dynamically registered/unregistered. Support both mutable and immutable arguments.
+- [**Interceptors**](#interceptors)  
+  Advanced control layer for observing, modifying, or stopping emissions. Supports dynamic registration/unregistration and both mutable and immutable arguments.
 
-- [**Freeze / Unfreeze** ](#freeze-unfreeze)
-  Temporarily toggle between freeze/unfreeze processing events for a specific event.
+## Organization & Management
 
-- [**Namespaces**](#namespaces)
-  Logical grouping of listeners. Enables easier management (Support all features).
+- [**Namespaces**](#namespaces)  
+  Logical grouping of listeners for easier management. Supports all features.
 
-- [**Fine grain controls** ](#controller)
-  event registration returns variety of controls like freeze, unfreeze, updatePriority, toggleQueue, updateDebounce, off(remove event completely) during runtime
+- [**Fine grain controls**](#controller)  
+  Returns various runtime controls for event listeners like freeze, unfreeze, updatePriority, toggleQueue, updateDebounce, and removal (`off`).
 
-- [**Listen to async emission flow**](#listeners)
-  emitAsync without atomic flag return listeners where you can attach a callback and track if onInvoked(final handler invoked post emission), onMiddlewareHalt(if a emission flow halted by middleware) & onQueued(if a emission is pushed into the queue)
+## Async Emission Flow Tracking
 
-- [**Atomic emission async**](#atomic-emission-async)
-  emitAsync with atomic flag as true will return a promise when a handler of this emission has returned some response, only works with 1 registered handler, if before invokation of final handler on frozen, middleware halt, invokeLimit reached etc will return in rejection. 100% typescript generic support
-
-- [**Atomic emission sync**](#atomic-emission-sync)
-  emit with atomic flag as true will return a value when a handler of this emission has returned some response, only works with 1 registered handler, if before invokation of final handler on frozen, middleware halt, invokeLimit reached etc will return in undefined. 100% typescript generic support
+- [**Listen to async emission flow**](#listeners)  
+  For `emitAsync` without atomic flag, returns listeners that allow attaching callbacks to track emission stages:
+  - `onInvoke` — final handler invoked
+  - `onMiddlewareHalt` — emission halted by middleware
+  - `onQueued` — emission pushed into the queue
 
 ---
 
 ### Emission Feature Matrix
 
-| Feature             | `emit` | `emitAsync` | `emitAll` |
-| ------------------- | ------ | ----------- | --------- |
-| Sync                | ✅     | ❌          | ❌        |
-| Async               | ❌     | ✅          | ✅        |
-| Debounce            | ❌     | ✅          | ✅        |
-| Queued              | ❌     | ✅          | ❌        |
-| InvokeLimit         | ✅     | ✅          | ✅        |
-| Priority            | ✅     | ❌          | ❌        |
-| Middlewares         | ✅     | ✅          | ✅        |
-| Interceptors        | ✅     | ✅          | ✅        |
-| Freeze/Unfreeze     | ✅     | ✅          | ✅        |
-| Namespace           | ✅     | ✅          | ✅        |
-| Waits all Listeners | ❌     | ❌          | ✅        |
+| Feature         | `emit` | `emitAsync` | `emitAll` |
+| --------------- | ------ | ----------- | --------- |
+| Sync            | ✅     | ❌          | ❌        |
+| Async           | ❌     | ✅          | ✅        |
+| Debounce        | ❌     | ✅          | ✅        |
+| Queued          | ❌     | ✅          | ❌        |
+| InvokeLimit     | ✅     | ✅          | ✅        |
+| Priority        | ✅     | ❌          | ❌        |
+| Middlewares     | ✅     | ✅          | ✅        |
+| Interceptors    | ✅     | ✅          | ✅        |
+| Freeze/Unfreeze | ✅     | ✅          | ✅        |
+| Namespace       | ✅     | ✅          | ✅        |
+| Listeners       | ❌     | ✅          | ❌        |
+| Atomic          | ✅     | ✅          | ❌        |
 
 ## API
 
