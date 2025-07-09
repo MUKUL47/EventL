@@ -21,9 +21,9 @@ type Middlewares<T extends EventRecord, V extends keyof T> = Array<
   Middleware<T, V>
 >;
 
-type Invoker<T extends EventRecord, V extends keyof T> = (
+type Invoker<T extends EventRecord, V extends keyof T, R extends unknown> = (
   args: T[V]
-) => unknown;
+) => R;
 
 type EventData<T extends EventRecord, V extends keyof T> = {
   invoker: Invoker<T, V>;
@@ -47,6 +47,10 @@ type EventData<T extends EventRecord, V extends keyof T> = {
     invokers: Array<{
       cb: Invoker<T, V>;
       args: T[V];
+      atomicResponseHandler?: {
+        resolve: (...args) => void;
+        reject: (...args) => void;
+      };
     }>;
     finished: boolean;
   } | null;
@@ -112,6 +116,6 @@ type EmitAsync<Response extends boolean = false, V extends keyof T = any> = (
   args: T[V],
   options?: {
     namespace?: boolean;
-    isAtomic?: Response;
+    atomic?: Response;
   }
 ) => Response extends true ? Promise<any> : EmitAsyncReturn;
