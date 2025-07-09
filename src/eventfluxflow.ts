@@ -144,6 +144,10 @@ export class EventFluxFlow<
     reject?.(new Error("[emitAsync] handler is frozen"));
   }
 
+  #throwInvokeLimitErrorOnAtomic(reject?: (...args) => any) {
+    reject?.(new Error("[emitAsync] invoke limit reached for this handler"));
+  }
+
   async #emitQueue<V extends keyof T>(
     event: EventData<T, keyof T>,
     args: T[V],
@@ -157,7 +161,10 @@ export class EventFluxFlow<
     }>
   ) {
     if (!event.queue) return;
-    if (!this.#updateInvoker(event)) return;
+    if (!this.#updateInvoker(event)) {
+      this.#throwInvokeLimitErrorOnAtomic(options?.atomicPromise?.reject);
+      return;
+    }
     event.queue.invokers.push({
       args,
       cb: event.invoker,
@@ -227,7 +234,7 @@ export class EventFluxFlow<
    * @param {V} eventName - The event name to register
    * @param {Invoker<T, V>} invoker - The callback function to be invoked
    * @param {Partial<EventDataOnParam<T, V>>} [options] - Options like debounce, priority, withQueue, middlewares and invokeLimit.
-   * @returns {{ cancel: () => void, id: number }} - unique ID and cancel event callback
+   * @returns {{  freeze: () => void; unFreeze: () => void; useMiddleware: (...middlewares: Middleware<T, V>[]) => void; toggleQueue: (flag: boolean) => void; updateInvokerLimit: (limit: number) => void; updateDebounce: (P: number) => void; id: number; off: () => void; }} - unique ID and cancel event callback
    */
   on<V extends keyof T>(
     eventName: V,
@@ -333,7 +340,7 @@ export class EventFluxFlow<
    * @param {V} eventName - The event name for emission
    * @param {any} args - argument of the registered event
    * @param {{namespace: boolean; atomic: boolean}} [options] - if true emit all events with eventName prefix| if atomic=true will return registered handler response
-   * @returns {InvokerReturnType[V] : void}
+   * @returns {InvokerReturnType[V] | void}
    */
   emit<V extends keyof T, R extends boolean>(
     eventName: V,
@@ -388,7 +395,7 @@ export class EventFluxFlow<
    * @param {V} eventName - The event name to emit async
    * @param {any} args - argument of the registered event
    * @param {{namespace: boolean; atomic: boolean}} [options] - if true emit all events with eventName prefix| if atomic=true will return Promise<1 registered handler>
-   * @returns {Promise<Promise<InvokerReturnType[V]> | EmitAsyncReturn>} - irrelvant return promise
+   * @returns {Promise<InvokerReturnType[V]> | {onInvoke: (cb) => (listeners.onInvoke = cb), onMiddlewareHalt: (cb) => (listeners.onMiddlewareHalt = cb),onQueued: (cb) => (listeners.onQueued = cb)}}
    */
   emitAsync<
     V extends keyof T,
@@ -454,7 +461,10 @@ export class EventFluxFlow<
       }
 
       this.#handleDebouce(eventBlob, async () => {
-        if (!this.#updateInvoker(eventBlob)) return;
+        if (!this.#updateInvoker(eventBlob)) {
+          this.#throwInvokeLimitErrorOnAtomic(atomicPromiseFn.reject);
+          return;
+        }
         if (
           !(await this.#invokeMiddlewareInterceptorsAsync(
             {
