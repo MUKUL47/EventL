@@ -23,7 +23,7 @@ type Middlewares<T extends EventRecord, V extends keyof T> = Array<
 
 type Invoker<T extends EventRecord, V extends keyof T, R extends unknown> = (
   args: T[V]
-) => R;
+) => R | Promise<R>;
 
 type EventData<T extends EventRecord, V extends keyof T> = {
   invoker: Invoker<T, V>;
@@ -64,7 +64,7 @@ type EventData<T extends EventRecord, V extends keyof T> = {
   priority: number;
 };
 
-type EventDataOnReturn = {
+type EventDataOnReturn<T extends EventRecord, V extends keyof T> = {
   freeze: () => void;
   unFreeze: () => void;
   useMiddleware: (...middlewares: Middleware<T, V>[]) => void;

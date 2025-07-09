@@ -43,7 +43,6 @@ export class EventFluxFlow<
     const { eventName, middlewares, args, status, id } = resp;
     let idx = 0;
     for (const c of middlewares ?? []) {
-      idx++;
       try {
         if (!!status?.isFrozen) return false;
         const resp = await c(eventName, args);
@@ -51,6 +50,7 @@ export class EventFluxFlow<
           listeners?.onMiddlewareHalt?.(id, idx);
           return false;
         }
+        idx++;
       } catch (e) {
         this.logger.warn(e);
         return false;
@@ -233,7 +233,7 @@ export class EventFluxFlow<
     eventName: V,
     invoker: Invoker<T, V, InvokerReturnType[V]>,
     options?: EventDataOnParam<T, V>
-  ): EventDataOnReturn {
+  ): EventDataOnReturn<T, V> {
     let isNew: Array<EventData<T, keyof T>> | undefined;
     if (!this.events.has(eventName)) {
       isNew = [];
@@ -390,7 +390,10 @@ export class EventFluxFlow<
    * @param {{namespace: boolean; atomic: boolean}} [options] - if true emit all events with eventName prefix| if atomic=true will return Promise<1 registered handler>
    * @returns {Promise<Promise<InvokerReturnType[V]> | EmitAsyncReturn>} - irrelvant return promise
    */
-  emitAsync<V extends keyof T, R extends boolean>(
+  emitAsync<
+    V extends keyof T,
+    R extends boolean | EmitAsyncReturn = EmitAsyncReturn //sigh
+  >(
     eventName: V,
     args: T[V],
     options?: {
