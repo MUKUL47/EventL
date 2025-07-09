@@ -1,6 +1,6 @@
 # EventFluxFlow
 
-## More Than Just an "Event Emitter" — A Complete Event Orchestration Toolkit EventFluxFlow isn’t your typical event emitter. It’s packed with powerful features that give you full control over how events flow in your app — from sync and async handling to middlewares, queues, priorities, and more. Whether you’re building simple apps or complex systems, it helps you manage events cleanly and efficiently.
+## A powerful and versatile event orchestration library that goes far beyond a basic "event emitter".
 
 # Features
 
