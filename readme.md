@@ -70,80 +70,120 @@
 ## API
 
 ```ts
-   on<V extends keyof T>(eventName: V, invoker: Invoker<T, V>, options?: EventDataOnParam<T, V>): {
-  freeze: () => void;
-  unFreeze: () => void;
-  useMiddleware: (...middlewares: Middleware<T, V>[]) => void;
-  toggleQueue: (flag: boolean) => void;
-  updateInvokerLimit: (limit: number) => void;
-  updateDebounce: (P: number) => void;
-  id: number;
-  off: () => void;
-};
-    /**
-     * @template T - Event map
-     * @template V - event key
-     * @description Register interception invocation for an event
-     * @param {V} eventName - The event name to intercept
-     * @param {(args: F extends true ? T[V] : Readonly<T[V]>) => unknown} invoker - The callback function to be invoked during interception
-     * @param {boolean} mutable - while intercepting arguments can be both immutable or mutable
-     * @returns {void}
-     */
-    intercept<V extends keyof T, F extends boolean>(eventName: V, invoker: (args: F extends true ? T[V] : Readonly<T[V]>) => unknown, mutable?: F): void;
-    /**
-     * @template T - Event map
-     * @template V - event key
-     * @description emission an event invocation synchronously - middlewares & interceptors are executed synchronously, debouce & queues are ignored
-     * @param {V} eventName - The event name for emission
-     * @param {any} args - argument of the registered event
-     * @param {{namespace: boolean}} [options] - if true emit all events with eventName prefix
-     * @returns {void}
-     */
-    emit<V extends keyof T>(eventName: V, args: T[V], options?: Partial<{
-        namespace: boolean;
-    }>): void;
-    /**
-     * @template T - Event map
-     * @template V - event key
-     * @description emission an event invocation asynchronously - middlewares & interceptors are executed async
-     * @param {V} eventName - The event name to emit async
-     * @param {any} args - argument of the registered event
-     * @param {{namespace: boolean}} [options] - if true emit all events with eventName prefix
-     * @returns {Promise<void>} - irrelvant return promise
-     */
-    emitAsync<V extends keyof T>(eventName: V, args: T[V], options?: Partial<{
-        namespace: boolean;
-    }>): Promise<void>;
-    /**
-     * @template T - Event map
-     * @template V - event key
-     * @description all registered events are executed then promise is completed, debouce is ignored(warning)
-     * @param {V} eventName - The event name for emission
-     * @param {any} args - argument of the registered event
-     * @param {{namespace: boolean}} [options] - if true emit all events with eventName prefix
-     * @returns {Promise<void>} - once all registered events are completed promise is then resolved
-     */
-    emitAll<V extends keyof T>(eventName: V, args: T[V], options?: Partial<{
-        namespace: string;
-    }>): Promise<void>;
-    /**
-     * @template T - Event map
-     * @template V - event key
-     * @description remove specific event type
-     * @param {V} e - The event name
-     * @param {Function} fn - referenced function
-     * @returns {void}
-     */
-    off<V extends keyof T>(e: V, fn: Function): void;
-    /**
-     * @template T - Event map
-     * @template V - event key
-     * @description deregister interception invocation for an event
-     * @param {V} eventName - The event name to intercept
-     * @param {Function} invoker - The callback function to be removed - must be referenced
-     * @returns {void}
-     */
-    interceptOff<V extends keyof T>(e: V, fn: Function): void;
+declare class EventFluxFlow<
+  T extends EventRecord,
+  InvokerReturnType extends
+    | {
+        [P in keyof T]: unknown;
+      }
+    | never = any
+> {
+  #private;
+  private events;
+  private interceptors;
+  private id;
+  private logger;
+  constructor(options?: Partial<ConstructorParameters<typeof Logger>["0"]>);
+  /**
+   * @template T - Event map
+   * @template V - event key
+   * @description Register invocation for an event
+   * @param {V} eventName - The event name to register
+   * @param {Invoker<T, V>} invoker - The callback function to be invoked
+   * @param {Partial<EventDataOnParam<T, V>>} [options] - Options like debounce, priority, withQueue, middlewares and invokeLimit.
+   * @returns {{  freeze: () => void; unFreeze: () => void; useMiddleware: (...middlewares: Middleware<T, V>[]) => void; toggleQueue: (flag: boolean) => void; updateInvokerLimit: (limit: number) => void; updateDebounce: (P: number) => void; id: number; off: () => void; }} - unique ID and cancel event callback
+   */
+  on<V extends keyof T>(
+    eventName: V,
+    invoker: Invoker<T, V, InvokerReturnType[V]>,
+    options?: EventDataOnParam<T, V>
+  ): EventDataOnReturn<T, V>;
+  /**
+   * @template T - Event map
+   * @template V - event key
+   * @description Register interception invocation for an event
+   * @param {V} eventName - The event name to intercept
+   * @param {(args: F extends true ? T[V] : Readonly<T[V]>) => unknown} invoker - The callback function to be invoked during interception
+   * @param {boolean} mutable - while intercepting arguments can be both immutable or mutable
+   * @returns {void}
+   */
+  intercept<V extends keyof T, F extends boolean>(
+    eventName: V,
+    invoker: (args: F extends true ? T[V] : Readonly<T[V]>) => unknown,
+    mutable?: F
+  ): void;
+  /**
+   * @template T - Event map
+   * @template V - event key
+   * @description emission an event invocation synchronously - middlewares & interceptors are executed synchronously, debouce & queues are ignored
+   * @param {V} eventName - The event name for emission
+   * @param {any} args - argument of the registered event
+   * @param {{namespace: boolean; atomic: boolean}} [options] - if true emit all events with eventName prefix| if atomic=true will return registered handler response
+   * @returns {InvokerReturnType[V] | void}
+   */
+  emit<V extends keyof T, R extends boolean>(
+    eventName: V,
+    args: T[V],
+    options?: Partial<{
+      namespace: boolean;
+      atomic?: R;
+    }>
+  ): R extends true ? InvokerReturnType[V] : void;
+  /**
+   * @template T - Event map
+   * @template V - event key
+   * @description emission an event invocation asynchronously - middlewares & interceptors are executed async
+   * @param {V} eventName - The event name to emit async
+   * @param {any} args - argument of the registered event
+   * @param {{namespace: boolean; atomic: boolean}} [options] - if true emit all events with eventName prefix| if atomic=true will return Promise<1 registered handler>
+   * @returns {Promise<InvokerReturnType[V]> | {onInvoke: (cb) => (listeners.onInvoke = cb), onMiddlewareHalt: (cb) => (listeners.onMiddlewareHalt = cb),onQueued: (cb) => (listeners.onQueued = cb)}}
+   */
+  emitAsync<
+    V extends keyof T,
+    R extends boolean | EmitAsyncReturn = EmitAsyncReturn
+  >(
+    eventName: V,
+    args: T[V],
+    options?: {
+      namespace?: boolean;
+      atomic?: R;
+    }
+  ): R extends true ? Promise<InvokerReturnType[V]> : EmitAsyncReturn;
+  /**
+   * @template V - event key
+   * @template R - promise response
+   * @description all registered events are executed then promise is completed, debouce is ignored(warning)
+   * @param {V} eventName - The event name for emission
+   * @param {any} args - argument of the registered event
+   * @param {{namespace: boolean}} [options] - if true emit all events with eventName prefix
+   * @returns {Promise<void>} - once all registered events are completed promise is then resolved
+   */
+  emitAll<V extends keyof T>(
+    eventName: V,
+    args: T[V],
+    options?: Partial<{
+      namespace: string;
+    }>
+  ): Promise<unknown[]>;
+  /**
+   * @template T - Event map
+   * @template V - event key
+   * @description remove specific event type
+   * @param {V} e - The event name
+   * @param {Function} fn - referenced function
+   * @returns {void}
+   */
+  off<V extends keyof T>(e: V, fn: Function): void;
+  /**
+   * @template T - Event map
+   * @template V - event key
+   * @description deregister interception invocation for an event
+   * @param {V} eventName - The event name to intercept
+   * @param {Function} invoker - The callback function to be removed - must be referenced
+   * @returns {void}
+   */
+  interceptOff<V extends keyof T>(e: V, fn: Function): void;
+}
 ```
 
 ### Simple sync emission
