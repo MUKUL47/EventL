@@ -21,9 +21,9 @@ type Middlewares<T extends EventRecord, V extends keyof T> = Array<
   Middleware<T, V>
 >;
 
-type Invoker<T extends EventRecord, V extends keyof T> = (
+type Invoker<T extends EventRecord, V extends keyof T, R extends unknown> = (
   args: T[V]
-) => unknown;
+) => R | Promise<R>;
 
 type EventData<T extends EventRecord, V extends keyof T> = {
   invoker: Invoker<T, V>;
@@ -47,6 +47,10 @@ type EventData<T extends EventRecord, V extends keyof T> = {
     invokers: Array<{
       cb: Invoker<T, V>;
       args: T[V];
+      atomicResponseHandler?: {
+        resolve: (...args) => void;
+        reject: (...args) => void;
+      };
     }>;
     finished: boolean;
   } | null;
@@ -60,7 +64,7 @@ type EventData<T extends EventRecord, V extends keyof T> = {
   priority: number;
 };
 
-type EventDataOnReturn = {
+type EventDataOnReturn<T extends EventRecord, V extends keyof T> = {
   freeze: () => void;
   unFreeze: () => void;
   useMiddleware: (...middlewares: Middleware<T, V>[]) => void;
@@ -83,4 +87,35 @@ type MiddlewareInterceptorsArgs<T, V> = {
   middlewares: Middlewares<T, V>;
   args: T[V];
   status: EventData<T, V>["status"];
+  id: number;
 };
+
+type EmitAsyncListenerArgs<T extends keyof EmitAsyncListeners> = Parameters<
+  EmitAsyncListeners[T]
+>;
+
+type EmitAsyncListeners = {
+  onInvoke: (handlerId: number) => void;
+  onMiddlewareHalt: (handlerId: number, middlewareIndex: number) => void;
+  onQueued: (handlerId: number, queueIdx: number) => void;
+};
+
+type AsyncListenerType = {
+  [P in keyof EmitAsyncListeners]?: (
+    ...cb: EmitAsyncListenerArgs<P>
+  ) => any | undefined;
+};
+
+type EmitAsyncReturn = {
+  [P in keyof EmitAsyncListeners]: (
+    cb: (...arg: EmitAsyncListenerArgs<P>) => any
+  ) => any;
+};
+type EmitAsync<Response extends boolean = false, V extends keyof T = any> = (
+  eventName: V,
+  args: T[V],
+  options?: {
+    namespace?: boolean;
+    atomic?: Response;
+  }
+) => Response extends true ? Promise<any> : EmitAsyncReturn;

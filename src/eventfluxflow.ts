@@ -1,6 +1,9 @@
 import { Logger } from "./logger";
 
-export class EventFluxFlow<T extends EventRecord> {
+export class EventFluxFlow<
+  T extends EventRecord,
+  InvokerReturnType extends { [P in keyof T]: unknown } | never = any
+> {
   private events: Map<keyof T, Array<EventData<T, keyof T>>>;
   private interceptors: Map<keyof T, Interceptors<T, keyof T>>;
   private id: number;
@@ -34,14 +37,20 @@ export class EventFluxFlow<T extends EventRecord> {
   }
 
   async #invokeMiddlewaresAsync<V extends keyof T>(
-    resp: MiddlewareInterceptorsArgs<T, V>
+    resp: MiddlewareInterceptorsArgs<T, V>,
+    listeners?: AsyncListenerType
   ): Promise<boolean> {
-    const { eventName, middlewares, args, status } = resp;
+    const { eventName, middlewares, args, status, id } = resp;
+    let idx = 0;
     for (const c of middlewares ?? []) {
       try {
         if (!!status?.isFrozen) return false;
         const resp = await c(eventName, args);
-        if (resp === false) return false;
+        if (resp === false) {
+          listeners?.onMiddlewareHalt?.(id, idx);
+          return false;
+        }
+        idx++;
       } catch (e) {
         this.logger.warn(e);
         return false;
@@ -88,9 +97,10 @@ export class EventFluxFlow<T extends EventRecord> {
   }
 
   async #invokeMiddlewareInterceptorsAsync<V extends keyof T>(
-    resp: MiddlewareInterceptorsArgs<T, V>
+    resp: MiddlewareInterceptorsArgs<T, V>,
+    listeners?: AsyncListenerType
   ) {
-    if (!(await this.#invokeMiddlewaresAsync(resp))) return false;
+    if (!(await this.#invokeMiddlewaresAsync(resp, listeners))) return false;
     if (!!resp?.status?.isFrozen) return false;
     this.#invokeInterceptors(resp);
     return true;
@@ -130,33 +140,74 @@ export class EventFluxFlow<T extends EventRecord> {
     return currentEvents;
   }
 
+  #throwFrozenErrorOnAtomic(reject?: (...args) => any) {
+    reject?.(new Error("[emitAsync] handler is frozen"));
+  }
+
+  #throwInvokeLimitErrorOnAtomic(reject?: (...args) => any) {
+    reject?.(new Error("[emitAsync] invoke limit reached for this handler"));
+  }
+
   async #emitQueue<V extends keyof T>(
     event: EventData<T, keyof T>,
     args: T[V],
-    eventName: V
+    eventName: V,
+    options: Partial<{
+      listeners: AsyncListenerType;
+      atomicPromise: Pick<
+        EventData<T, keyof T>,
+        "queue"
+      >["queue"]["invokers"]["0"]["atomicResponseHandler"];
+    }>
   ) {
-    if (!event.queue || event.status?.isFrozen) return;
-    if (!this.#updateInvoker(event)) return;
+    if (!event.queue) return;
+    if (!this.#updateInvoker(event)) {
+      this.#throwInvokeLimitErrorOnAtomic(options?.atomicPromise?.reject);
+      return;
+    }
     event.queue.invokers.push({
       args,
       cb: event.invoker,
+      atomicResponseHandler: options?.atomicPromise,
     });
+    options?.listeners?.onQueued?.(event.id, event.queue.invokers.length - 1);
     if (event.queue.inProgress) return;
     while (event.queue.invokers.length > 0) {
       event.queue.inProgress = true;
       const current = event.queue.invokers.shift()!;
-      if (event.status?.isFrozen) return;
+      if (event.status?.isFrozen) {
+        this.#throwFrozenErrorOnAtomic(current.atomicResponseHandler?.reject);
+        return;
+      }
       if (
-        !(await this.#invokeMiddlewareInterceptorsAsync({
-          eventName,
-          middlewares: event.middlewares ?? [],
-          args: current?.args,
-          status: event.status,
-        }))
+        !(await this.#invokeMiddlewareInterceptorsAsync(
+          {
+            eventName,
+            middlewares: event.middlewares ?? [],
+            args: current?.args,
+            status: event.status,
+            id: event.id,
+          },
+          options?.listeners
+        ))
       ) {
         continue;
       }
-      if (event.status?.isFrozen) return;
+      if (event.status?.isFrozen) {
+        this.#throwFrozenErrorOnAtomic(current.atomicResponseHandler?.reject);
+        return;
+      }
+      options?.listeners?.onInvoke?.(event.id);
+      if (
+        !!current?.atomicResponseHandler &&
+        current?.atomicResponseHandler?.reject &&
+        current?.atomicResponseHandler?.resolve
+      ) {
+        Promise.resolve(event.invoker(current.args))
+          .then(current.atomicResponseHandler?.resolve)
+          .catch(current.atomicResponseHandler?.reject);
+        continue;
+      }
       await event.invoker(current.args);
     }
     event.queue.inProgress = false;
@@ -165,12 +216,12 @@ export class EventFluxFlow<T extends EventRecord> {
   #handleDebouce(event: EventData<T, keyof T>, fn: () => any) {
     const { debouceFactory } = event;
     if (!!debouceFactory) {
-      debouceFactory?.lastDebouncedReference &&
+      if (debouceFactory?.lastDebouncedReference) {
         clearTimeout(debouceFactory?.lastDebouncedReference);
-      event.debouceFactory!.lastDebouncedReference = setTimeout(
-        fn,
-        debouceFactory.debounce
-      );
+      }
+      event.debouceFactory!.lastDebouncedReference = setTimeout(() => {
+        fn();
+      }, debouceFactory.debounce);
       return;
     }
     fn();
@@ -183,13 +234,13 @@ export class EventFluxFlow<T extends EventRecord> {
    * @param {V} eventName - The event name to register
    * @param {Invoker<T, V>} invoker - The callback function to be invoked
    * @param {Partial<EventDataOnParam<T, V>>} [options] - Options like debounce, priority, withQueue, middlewares and invokeLimit.
-   * @returns {{ cancel: () => void, id: number }} - unique ID and cancel event callback
+   * @returns {{  freeze: () => void; unFreeze: () => void; useMiddleware: (...middlewares: Middleware<T, V>[]) => void; toggleQueue: (flag: boolean) => void; updateInvokerLimit: (limit: number) => void; updateDebounce: (P: number) => void; id: number; off: () => void; }} - unique ID and cancel event callback
    */
   on<V extends keyof T>(
     eventName: V,
-    invoker: Invoker<T, V>,
+    invoker: Invoker<T, V, InvokerReturnType[V]>,
     options?: EventDataOnParam<T, V>
-  ): EventDataOnReturn {
+  ): EventDataOnReturn<T, V> {
     let isNew: Array<EventData<T, keyof T>> | undefined;
     if (!this.events.has(eventName)) {
       isNew = [];
@@ -221,7 +272,7 @@ export class EventFluxFlow<T extends EventRecord> {
           }
         : null;
     const finalEvent = {
-      invoker: invoker as Invoker<T, keyof T>,
+      invoker: invoker as Invoker<T, keyof T, InvokerReturnType[V]>,
       debouceFactory: addDebounce(options?.debounce),
       id,
       status,
@@ -231,7 +282,6 @@ export class EventFluxFlow<T extends EventRecord> {
       isQueue: !!options?.withQueue,
       priority: options?.priority ?? Infinity,
       queue: addQueue(!!options?.withQueue),
-
       middlewares: options?.middlewares ?? [],
     };
     currentEvent?.push(finalEvent);
@@ -289,25 +339,35 @@ export class EventFluxFlow<T extends EventRecord> {
    * @description emission an event invocation synchronously - middlewares & interceptors are executed synchronously, debouce & queues are ignored
    * @param {V} eventName - The event name for emission
    * @param {any} args - argument of the registered event
-   * @param {{namespace: boolean}} [options] - if true emit all events with eventName prefix
-   * @returns {void}
+   * @param {{namespace: boolean; atomic: boolean}} [options] - if true emit all events with eventName prefix| if atomic=true will return registered handler response
+   * @returns {InvokerReturnType[V] | void}
    */
-  emit<V extends keyof T>(
+  emit<V extends keyof T, R extends boolean>(
     eventName: V,
     args: T[V],
     options?: Partial<{
       namespace: boolean;
+      atomic?: R;
     }>
-  ): void {
+  ): R extends true ? InvokerReturnType[V] : void {
     const currentEvents: Array<EventData<T, keyof T>> = this.#getEvents(
       eventName,
       {
         namespace: !!options?.namespace,
       }
     );
-    currentEvents.forEach(async (eventBlob) => {
+    if (currentEvents.length === 0) {
+      this.logger.warn(`[emit] no registered handlers found for this emission`);
+      return;
+    }
+    if (!!options?.atomic && currentEvents.length > 1) {
+      this.logger.throw(
+        `[emit] with atomic response should only have 1 registered handler, but found ${currentEvents.length}`
+      );
+      return;
+    }
+    for (const eventBlob of currentEvents) {
       const { middlewares, invoker, status } = eventBlob;
-
       if (!!status?.isFrozen) return;
       if (!this.#updateInvoker(eventBlob)) return;
       if (
@@ -316,12 +376,16 @@ export class EventFluxFlow<T extends EventRecord> {
           middlewares: middlewares ?? [],
           args,
           status: eventBlob.status,
+          id: eventBlob.id,
         })
       ) {
         return;
       }
-      invoker(args);
-    });
+      const r = invoker(args);
+      if (!!options?.atomic) {
+        return r;
+      }
+    }
   }
 
   /**
@@ -330,57 +394,122 @@ export class EventFluxFlow<T extends EventRecord> {
    * @description emission an event invocation asynchronously - middlewares & interceptors are executed async
    * @param {V} eventName - The event name to emit async
    * @param {any} args - argument of the registered event
-   * @param {{namespace: boolean}} [options] - if true emit all events with eventName prefix
-   * @returns {Promise<void>} - irrelvant return promise
+   * @param {{namespace: boolean; atomic: boolean}} [options] - if true emit all events with eventName prefix| if atomic=true will return Promise<1 registered handler>
+   * @returns {Promise<InvokerReturnType[V]> | {onInvoke: (cb) => (listeners.onInvoke = cb), onMiddlewareHalt: (cb) => (listeners.onMiddlewareHalt = cb),onQueued: (cb) => (listeners.onQueued = cb)}}
    */
-  async emitAsync<V extends keyof T>(
+  emitAsync<
+    V extends keyof T,
+    R extends boolean | EmitAsyncReturn = EmitAsyncReturn //sigh
+  >(
     eventName: V,
     args: T[V],
-    options?: Partial<{
-      namespace: boolean;
-    }>
-  ): Promise<void> {
+    options?: {
+      namespace?: boolean;
+      atomic?: R;
+    }
+  ): R extends true ? Promise<InvokerReturnType[V]> : EmitAsyncReturn {
     const currentEvents: Array<EventData<T, keyof T>> = this.#getEvents(
       eventName,
       {
         namespace: !!options?.namespace,
       }
     );
+    const listeners: AsyncListenerType = {};
+    let atomicPromiseFn = {
+      resolve: (r: InvokerReturnType[V]) => {},
+      reject: (r: Error) => {},
+    };
+    if (currentEvents.length === 0) {
+      this.logger.warn(
+        "[emitAsync] no registered handlers found for this emission"
+      );
+      return;
+    }
+    if (!!options?.atomic && currentEvents.length > 1) {
+      this.logger.throw(
+        "[emitAsync] with atomic response should only have 1 registered handler, for more than 1 handlers in Promise.all mode use emitAll"
+      );
+      return;
+    }
+    const atomicPromise = new Promise<InvokerReturnType[V]>((r, reject) => {
+      atomicPromiseFn.resolve = r;
+      atomicPromiseFn.reject = reject;
+    });
     currentEvents.forEach(async (eventBlob) => {
       const { middlewares, invoker, status, debouceFactory, queue } = eventBlob;
-
-      if (!!status?.isFrozen) return;
+      if (!!status?.isFrozen) {
+        !!options?.atomic &&
+          this.#throwFrozenErrorOnAtomic(atomicPromiseFn.reject);
+        return;
+      }
       if (!!queue) {
+        const promiseHandler = !!options?.atomic ? atomicPromiseFn : null;
         if (!!debouceFactory) {
-          this.#handleDebouce(eventBlob, () => {
-            this.#emitQueue(eventBlob, args, eventName);
-          });
+          this.#handleDebouce(eventBlob, () =>
+            this.#emitQueue(eventBlob, args, eventName, {
+              listeners,
+              atomicPromise: promiseHandler,
+            })
+          );
           return;
         }
-        this.#emitQueue(eventBlob, args, eventName);
+        this.#emitQueue(eventBlob, args, eventName, {
+          listeners,
+          atomicPromise: promiseHandler,
+        });
         return;
       }
 
       this.#handleDebouce(eventBlob, async () => {
-        if (!this.#updateInvoker(eventBlob)) return;
+        if (!this.#updateInvoker(eventBlob)) {
+          this.#throwInvokeLimitErrorOnAtomic(atomicPromiseFn.reject);
+          return;
+        }
         if (
-          !(await this.#invokeMiddlewareInterceptorsAsync({
-            eventName,
-            middlewares: middlewares ?? [],
-            args,
-            status: eventBlob.status,
-          }))
+          !(await this.#invokeMiddlewareInterceptorsAsync(
+            {
+              eventName,
+              middlewares: middlewares ?? [],
+              args,
+              status: eventBlob.status,
+              id: eventBlob.id,
+            },
+            listeners
+          ))
         ) {
+          !!options?.atomic &&
+            atomicPromiseFn.reject(
+              new Error("[emitAsync] rejected by middleware")
+            );
+          return;
+        }
+
+        if (!!options?.atomic) {
+          Promise.resolve(invoker(args))
+            .then(atomicPromiseFn.resolve)
+            .catch(atomicPromiseFn.reject);
           return;
         }
         invoker(args);
+        listeners.onInvoke?.(eventBlob.id);
       });
     });
+
+    if (!!options?.atomic) {
+      return atomicPromise as R extends true
+        ? Promise<InvokerReturnType[V]>
+        : EmitAsyncReturn;
+    }
+    return {
+      onInvoke: (cb) => (listeners.onInvoke = cb),
+      onMiddlewareHalt: (cb) => (listeners.onMiddlewareHalt = cb),
+      onQueued: (cb) => (listeners.onQueued = cb),
+    } as R extends true ? Promise<InvokerReturnType[V]> : EmitAsyncReturn;
   }
 
   /**
-   * @template T - Event map
    * @template V - event key
+   * @template R - promise response
    * @description all registered events are executed then promise is completed, debouce is ignored(warning)
    * @param {V} eventName - The event name for emission
    * @param {any} args - argument of the registered event
@@ -393,7 +522,7 @@ export class EventFluxFlow<T extends EventRecord> {
     options?: Partial<{
       namespace: string;
     }>
-  ) {
+  ): Promise<unknown[]> {
     const currentEvents: Array<EventData<T, keyof T>> = this.#getEvents(
       eventName,
       {
@@ -410,7 +539,7 @@ export class EventFluxFlow<T extends EventRecord> {
       if (!this.#updateInvoker(event)) return false;
       return true;
     });
-    await Promise.all(
+    return await Promise.all(
       (
         await Promise.all(
           filteredEvents.map((currentEvent) =>
@@ -419,6 +548,7 @@ export class EventFluxFlow<T extends EventRecord> {
               middlewares: currentEvent?.middlewares ?? [],
               args,
               status: currentEvent.status,
+              id: currentEvent.id,
             })
           )
         )

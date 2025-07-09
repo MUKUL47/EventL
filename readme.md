@@ -10,7 +10,7 @@
 - [**emitAsync** ](#emitasync)
   Async emission. Executes all registered listeners, supports middlewares, interceptors, debounce, invokerLimit and queues.
 
-- [**emitAll**](#emitAll)  
+- [**emitAll**](#emitall)  
   Waits until all registered listeners for an event (including async ones) are completed (i.e., Promise.all).
 
 - [**debounce** ](#debounce)  
@@ -39,6 +39,15 @@
 
 - [**Fine grain controls** ](#controller)
   event registration returns variety of controls like freeze, unfreeze, updatePriority, toggleQueue, updateDebounce, off(remove event completely) during runtime
+
+- [**Listen to async emission flow**](#listeners)
+  emitAsync without atomic flag return listeners where you can attach a callback and track if onInvoked(final handler invoked post emission), onMiddlewareHalt(if a emission flow halted by middleware) & onQueued(if a emission is pushed into the queue)
+
+- [**Atomic emission async**](#atomic-emission-async)
+  emitAsync with atomic flag as true will return a promise when a handler of this emission has returned some response, only works with 1 registered handler, if before invokation of final handler on frozen, middleware halt, invokeLimit reached etc will return in rejection. 100% typescript generic support
+
+- [**Atomic emission sync**](#atomic-emission-sync)
+  emit with atomic flag as true will return a value when a handler of this emission has returned some response, only works with 1 registered handler, if before invokation of final handler on frozen, middleware halt, invokeLimit reached etc will return in undefined. 100% typescript generic support
 
 ---
 
@@ -711,4 +720,155 @@ E.emitAsync("JOB", { delay: 5, data: "B" });
 E.emitAsync("JOB", { delay: 1, data: "C" });
 await delay(350);
 //"ABC"
+```
+
+### Listeners
+
+```ts
+//ASYNC only
+//Please note you can only attach one listner per emission
+//onInvoke
+const e = new EventFluxFlow();
+const h = e.on("", () => {}, {
+  middlewares: [
+    async (a, c) => {
+      await new Promise((r) => setTimeout(r, 500));
+    },
+  ],
+});
+const h1 = e.on("", () => {}, {
+  middlewares: [
+    async (a, c) => {
+      await new Promise((r) => setTimeout(r, 100));
+    },
+  ],
+});
+const c = e.emitAsync("", 2);
+c.onInvoke((v: id) => {
+  //id of the handler
+  //output both h1 and h2 handlers are invoked with respective id
+  //h1.id === v true
+  //h2.id === v true
+});
+
+//onMiddlewareHalt
+const e = new EventFluxFlow();
+const h1 = e.on("", () => {}, {
+  middlewares: [(a, c) => {}, (a, c) => {}, (a, c) => false],
+});
+const h2 = e.on("", () => {}, {
+  middlewares: [(a, c) => {}, (a, c) => false, (a, c) => false],
+});
+const c = e.emitAsync("", 2);
+c.onMiddlewareHalt((invokerId, middlewareIndex) => {
+  //which invokerId with middleware index stopped the propagation
+  //h2.id, 2 index
+  //h1.id, 1 index
+});
+
+//onQueued
+//when a handler is pushed into queue this listener is invoked
+const e = new EventFluxFlow();
+const h1 = e.on("", () => {}, {
+  middlewares: [
+    async (a, c) => {
+      await delay(c);
+    },
+  ],
+  withQueue: true,
+});
+e.emitAsync("", 1000);
+e.emitAsync("", 2000);
+const thirdEmission = e.emitAsync("", 1000);
+thirdEmission.onQueued((invokerId, queueIndex) => {
+  //invokerId === thirdEmission.id
+});
+```
+
+### Atomic Emission Async
+
+```ts
+//simiple async emission
+const e = new EventFluxFlow<{ A: number }, { A: number }>(); //2nd type argument must be have same keys as first type and the value of the object represents the return type of handler
+e.on("A", async (delay) => {
+  return delay; //ts will throw error if not number
+  return ""; // Type 'Promise<string>' is not assignable to type 'Promise<number>'
+});
+await e.emitAsync("A", 500, { atomic: true }); //Promise<number>
+
+//atomic emission must be only for 1 registered handlers
+const e = new EventFluxFlow<{ A: number }, { A: number }>();
+e.on("A", async (delay) => {
+  await new Promise((rr) => setTimeout(rr, delay));
+  return delay;
+});
+const hand = async (delay) => {
+  await new Promise((rr) => setTimeout(rr, delay));
+  return delay;
+};
+const c = e.on("A", hand);
+await e.emitAsync("A", 500, { atomic: true }); //throws error
+//("[emitAsync] with atomic response should only have 1 registered handler, for more than 1 handlers in Promise.all mode use emitAll");
+
+c.off(); //remove the 2nd handler, please note that handler is not anonymous
+await e.emitAsync("A", 500, { atomic: true }); //500 works because only 1 handler remains
+
+//simple rejection post handler
+it("should catch on reject", async () => {
+  const e = new EventFluxFlow<{ A: number }, { A: number }>();
+  const c = e.on("A", async (delay) => {
+    throw new Error("123");
+  });
+  await e.emitAsync("A", 500, { atomic: true }); //rejected with 123
+});
+
+//middleware failed scenario
+const e = new EventFluxFlow<{ A: number }, { A: number }>();
+const c = e.on("A", (c) => {
+  return c;
+});
+c.useMiddleware((a, c) => {
+  return c % 2 == 0;
+});
+c.useMiddleware(async (a, c) => {
+  await new Promise((r) => setTimeout(r, 500));
+});
+await e.emitAsync("A", 1, { atomic: true });
+//[emitAsync] rejected by middleware, even number expected
+await e.emitAsync("A", 2, { atomic: true }); //2
+
+//queue example
+const e = new EventFluxFlow<{ a: number }, { a: number }>();
+e.on("a", (a) => a, {
+  middlewares: [
+    async (a, v) => {
+      if (v > 500) return false;
+      await new Promise((r) => setTimeout(r, v));
+    },
+  ],
+  withQueue: true,
+});
+let s = "";
+e.emitAsync("a", 300, { atomic: true }).then((v) => (s += v));
+e.emitAsync("a", 200, { atomic: true }).then((v) => (s += v));
+e.emitAsync("a", 100, { atomic: true }).then((v) => (s += v));
+await new Promise((r) => setTimeout(r, 610));
+expect(s).toBe("300200100");
+s = "";
+e.emitAsync("a", 500, { atomic: true }).catch((v) => {});
+e.emitAsync("a", 200, { atomic: true }).then((v) => (s += v));
+e.emitAsync("a", 100, { atomic: true }).then((v) => (s += v));
+await new Promise((r) => setTimeout(r, 1000));
+expect(s).toBe("200100"); //first queue is rejected by middleware
+```
+
+### Atomic Emission Sync
+
+```ts
+//this is just like above emitAsync example except it is just sychronous
+const e = new EventFluxFlow<{ A: number }, { A: number }>();
+e.on("A", (delay) => {
+  return delay / 2;
+});
+e.emit("A", 500, { atomic: true }); //return type number
 ```
