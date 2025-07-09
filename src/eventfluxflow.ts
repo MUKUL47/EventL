@@ -1,6 +1,9 @@
 import { Logger } from "./logger";
 
-export class EventFluxFlow<T extends EventRecord> {
+export class EventFluxFlow<
+  T extends EventRecord,
+  InvokerReturnType extends { [P in keyof T]: unknown } | never = never
+> {
   private events: Map<keyof T, Array<EventData<T, keyof T>>>;
   private interceptors: Map<keyof T, Interceptors<T, keyof T>>;
   private id: number;
@@ -348,21 +351,21 @@ export class EventFluxFlow<T extends EventRecord> {
    * @param {{namespace: boolean}} [options] - if true emit all events with eventName prefix
    * @returns {Promise<void>} - irrelvant return promise
    */
-  emitAsync<V extends keyof T, R extends unknown | never>(
+  emitAsync<V extends keyof T, R extends boolean>(
     eventName: V,
     args: T[V],
     options?: {
       namespace?: boolean;
       isAtomic?: R;
     }
-  ): R extends any ? Promise<R> : EmitAsyncReturn {
+  ): R extends true ? Promise<InvokerReturnType[V]> : EmitAsyncReturn {
     const currentEvents: Array<EventData<T, keyof T>> = this.#getEvents(
       eventName,
       {
         namespace: !!options?.namespace,
       }
     );
-    if (!!options?.isAtomic && currentEvents.length !== 0) {
+    if (!!options?.isAtomic && currentEvents.length !== 1) {
       this.logger.throw(
         "[emitAsync] with atomic response should only have 1 registered handler, for more than 1 handlers in Promise.all mode use emitAll"
       );
@@ -370,10 +373,10 @@ export class EventFluxFlow<T extends EventRecord> {
     }
     const listeners: AsyncListenerType = {};
     let atomicPromiseFn = {
-      resolve: (r: ConstructorParameters<typeof Promise>["0"]) => {},
-      reject: (r: string) => {},
+      resolve: (r: InvokerReturnType[V]) => {},
+      reject: (r: Error) => {},
     };
-    const atomicPromise = new Promise((r, reject) => {
+    const atomicPromise = new Promise<InvokerReturnType[V]>((r, reject) => {
       atomicPromiseFn.resolve = r;
       atomicPromiseFn.reject = reject;
     });
@@ -381,7 +384,9 @@ export class EventFluxFlow<T extends EventRecord> {
       const { middlewares, invoker, status, debouceFactory, queue } = eventBlob;
       if (!!status?.isFrozen) {
         if (!!options?.isAtomic) {
-          atomicPromiseFn.reject("[Reject][emitAsync] handler is frozen");
+          atomicPromiseFn.reject(
+            new Error("[Reject][emitAsync] handler is frozen")
+          );
         }
         return;
       }
@@ -410,6 +415,10 @@ export class EventFluxFlow<T extends EventRecord> {
             listeners
           ))
         ) {
+          !!options?.isAtomic &&
+            atomicPromiseFn.reject(
+              new Error("[Reject][emitAsync] rejected by middleware")
+            );
           return;
         }
 
@@ -424,13 +433,15 @@ export class EventFluxFlow<T extends EventRecord> {
     });
 
     if (!!options?.isAtomic) {
-      return atomicPromise as any;
+      return atomicPromise as R extends true
+        ? Promise<InvokerReturnType[V]>
+        : EmitAsyncReturn;
     }
     return {
       onInvoke: (cb) => (listeners.onInvoke = cb),
       onMiddlewareHalt: (cb) => (listeners.onMiddlewareHalt = cb),
       onQueued: (cb) => (listeners.onQueued = cb),
-    } as any;
+    } as R extends true ? Promise<InvokerReturnType[V]> : EmitAsyncReturn;
   }
 
   /**
