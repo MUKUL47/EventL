@@ -1,6 +1,6 @@
 {
   "name": "eventfluxflow",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "A feature-rich event emitter",
   "main": "./dist/index.js",
   "scripts": {
