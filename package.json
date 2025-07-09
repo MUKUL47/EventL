@@ -1,7 +1,7 @@
 {
   "name": "eventfluxflow",
-  "version": "1.0.6",
-  "description": "A feature-rich event emitter",
+  "version": "1.0.7",
+  "description": "A powerful and versatile event orchestration library that goes far beyond a basic event emitter.",
   "main": "./dist/index.js",
   "scripts": {
     "dev": "vite",
