@@ -310,6 +310,14 @@ export class EventFluxFlow<
       useMiddleware: (...m) => finalEvent.middlewares?.push(...m),
       id,
       off: () => this.off(eventName, invoker),
+      getDebounce: () =>
+        !!finalEvent?.debouceFactory
+          ? finalEvent?.debouceFactory?.debounce
+          : false,
+
+      getInvokerLimit: () =>
+        finalEvent?.invokerLimit > 0 ? finalEvent?.invokerLimit : false,
+      isFrozen: () => status.isFrozen,
     };
   }
 
@@ -521,6 +529,7 @@ export class EventFluxFlow<
     args: T[V],
     options?: Partial<{
       namespace: string;
+      includeFailedInvokers?: any;
     }>
   ): Promise<unknown[]> {
     const currentEvents: Array<EventData<T, keyof T>> = this.#getEvents(
@@ -539,7 +548,7 @@ export class EventFluxFlow<
       if (!this.#updateInvoker(event)) return false;
       return true;
     });
-    return await Promise.all(
+    const finalizeInvokerResponse = async () =>
       (
         await Promise.all(
           filteredEvents.map((currentEvent) =>
@@ -552,9 +561,11 @@ export class EventFluxFlow<
             })
           )
         )
-      )
-        .map((a, idx) => (a ? currentEvents[idx]?.invoker(args) : false))
-        .filter((v) => !!v)
+      ).map((a, idx) => (a ? currentEvents[idx]?.invoker(args) : false));
+    return await Promise.all(
+      !!options?.includeFailedInvokers
+        ? await finalizeInvokerResponse()
+        : (await finalizeInvokerResponse()).filter((v) => !!v)
     );
   }
 

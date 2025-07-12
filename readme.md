@@ -317,7 +317,7 @@ E.emitAsync("TEST", 5);
 setTimeout(() => E.emitAsync("TEST", 57), 80);
 setTimeout(() => E.emitAsync("TEST", 212), 120);
 await delay(500);
-//80 & 120
+//57 & 212
 ```
 
 ### Interceptors
@@ -911,10 +911,10 @@ e.emitAsync("a", 100, { atomic: true }).then((v) => (s += v));
 await new Promise((r) => setTimeout(r, 610));
 expect(s).toBe("300200100");
 s = "";
-e.emitAsync("a", 500, { atomic: true }).catch((v) => {});
+e.emitAsync("a", 500, { atomic: true }).then((v) => (s += v));
 e.emitAsync("a", 200, { atomic: true }).then((v) => (s += v));
 e.emitAsync("a", 100, { atomic: true }).then((v) => (s += v));
-await new Promise((r) => setTimeout(r, 1000));
+await new Promise((r) => setTimeout(r, 2000));
 expect(s).toBe("200100"); //first queue is rejected by middleware
 ```
 

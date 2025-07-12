@@ -84,7 +84,7 @@ describe("Atomic Emissions", () => {
       e.on("a", (a) => a, {
         middlewares: [
           async (a, v) => {
-            if (v > 500) return false;
+            if (v >= 500) return false;
             await new Promise((r) => setTimeout(r, v));
           },
         ],
@@ -97,7 +97,9 @@ describe("Atomic Emissions", () => {
       await new Promise((r) => setTimeout(r, 610));
       expect(s).toBe("300200100");
       s = "";
-      e.emitAsync("a", 500, { atomic: true }).catch((v) => {});
+      e.emitAsync("a", 500, { atomic: true })
+        .then((v) => (s += v))
+        .catch((v) => {});
       e.emitAsync("a", 200, { atomic: true }).then((v) => (s += v));
       e.emitAsync("a", 100, { atomic: true }).then((v) => (s += v));
       await new Promise((r) => setTimeout(r, 1000));

@@ -73,6 +73,11 @@ type EventDataOnReturn<T extends EventRecord, V extends keyof T> = {
   updateDebounce: (P: number) => void;
   id: number;
   off: () => void;
+
+  //getters
+  isFrozen: () => boolean;
+  getInvokerLimit: () => number | false;
+  getDebounce: () => number | false;
 };
 type EventDataOnParam<T extends EventRecord, V extends keyof T> = {
   middlewares?: Middlewares<T, V>;

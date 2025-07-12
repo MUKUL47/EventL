@@ -163,6 +163,29 @@ describe("AsyncEmit", () => {
     ]);
   });
 
+  it("should work with includeFailedInvokers option", async () => {
+    const E = new EventFlux<{
+      ADMIN: any;
+    }>();
+    const fn = jest.fn();
+    let obj: any = {};
+    E.on("ADMIN", async () => {
+      obj.TASK1 = true;
+      return true;
+    });
+    E.on("ADMIN", async (v) => {
+      obj.TASK2 = true;
+    }).useMiddleware((a, c) => {
+      return c == true;
+    });
+    E.emitAll("ADMIN", false, { includeFailedInvokers: true }).then((v) => {
+      expect(v).toStrictEqual([true, false]);
+    });
+    E.emitAll("ADMIN", false).then((v) => {
+      expect(v).toStrictEqual([true]);
+    });
+  });
+
   it("should work as intened with invoker", async () => {
     const E = new EventFlux<{
       ADMIN: any;
